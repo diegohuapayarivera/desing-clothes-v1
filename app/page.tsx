@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { signOut } from './actions'
-import type { Profile } from '@/types'
+import { ClosetView } from '@/components/closet/ClosetView'
+import type { Profile, Prenda, PrendaConUrl } from '@/types'
 
 function HangerIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -58,6 +59,9 @@ function EmptyClosetIllustration() {
   )
 }
 
+// Client wrapper for the empty-state "Agregar prenda" button
+import { EmptyStateAgregar } from '@/components/closet/EmptyStateAgregar'
+
 export default async function HomePage() {
   const supabase = await createClient()
   const {
@@ -78,6 +82,32 @@ export default async function HomePage() {
     redirect('/onboarding')
   }
 
+  // Fetch prendas
+  const { data: prendas } = await supabase
+    .from('prendas')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const prendasData = (prendas ?? []) as Prenda[]
+
+  // Generate signed URLs in one batch
+  let prendasConUrls: PrendaConUrl[] = []
+  if (prendasData.length > 0) {
+    const fotoPaths = prendasData.map((p) => p.foto_path)
+    const { data: signedData } = await supabase.storage
+      .from('prendas-fotos')
+      .createSignedUrls(fotoPaths, 3600)
+
+    const urlMap = new Map(
+      (signedData ?? []).map((s) => [s.path, s.signedUrl ?? '']),
+    )
+    prendasConUrls = prendasData.map((p) => ({
+      ...p,
+      signedUrl: urlMap.get(p.foto_path) ?? '',
+    }))
+  }
+
   const initials = profile.nombre
     ? profile.nombre
         .split(' ')
@@ -86,6 +116,9 @@ export default async function HomePage() {
         .join('')
         .toUpperCase()
     : '?'
+
+  const preferencia = profile.preferencia_prendas ?? 'ambas'
+  const tieneRopa = prendasConUrls.length > 0
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -124,7 +157,9 @@ export default async function HomePage() {
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
         {/* Greeting */}
         <div className="mb-8 animate-fade-up">
-          <p className="text-sm text-muted-foreground mb-1">Bienvenida de vuelta</p>
+          <p className="text-sm text-muted-foreground mb-1">
+            {tieneRopa ? 'Tu clóset' : 'Bienvenida de vuelta'}
+          </p>
           <h1
             className="text-3xl font-light text-foreground leading-tight"
             style={{ fontFamily: 'var(--font-display)' }}
@@ -133,48 +168,48 @@ export default async function HomePage() {
           </h1>
         </div>
 
-        {/* Empty state */}
-        <div className="flex flex-col items-center text-center py-12 px-6 animate-fade-up delay-100">
-          <div className="mb-6 opacity-70">
-            <EmptyClosetIllustration />
+        {tieneRopa ? (
+          /* ── Closet view with items ── */
+          <ClosetView
+            prendas={prendasConUrls}
+            preferencia={preferencia}
+            nombreUsuario={profile.nombre}
+          />
+        ) : (
+          /* ── Empty state ── */
+          <div className="animate-fade-up delay-100">
+            <div className="flex flex-col items-center text-center py-12 px-6">
+              <div className="mb-6 opacity-70">
+                <EmptyClosetIllustration />
+              </div>
+              <h2
+                className="text-xl font-light text-foreground mb-2"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Tu clóset está vacío
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-8">
+                Agrega tus prendas para empezar a recibir recomendaciones personalizadas.
+              </p>
+
+              <EmptyStateAgregar preferencia={preferencia} />
+            </div>
+
+            <div className="mt-4 animate-fade-up delay-200">
+              <button
+                disabled
+                className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary/5 border border-primary/20 text-sm font-medium text-primary/40 cursor-not-allowed"
+                aria-label="Próximamente: recomendaciones de outfits"
+              >
+                <span aria-hidden="true">{'✨'}</span>
+                {' ¿Qué me pongo hoy?'}
+                <span className="ml-auto text-xs bg-primary/10 text-primary/50 px-2 py-0.5 rounded-full">
+                  Próximamente
+                </span>
+              </button>
+            </div>
           </div>
-          <h2
-            className="text-xl font-light text-foreground mb-2"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Tu clóset está vacío
-          </h2>
-          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-            Agrega tus prendas para empezar a recibir recomendaciones personalizadas.
-          </p>
-        </div>
-
-        {/* CTA buttons */}
-        <div className="space-y-3 animate-fade-up delay-200">
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-border text-sm font-medium text-muted-foreground cursor-not-allowed opacity-50"
-            aria-label="Próximamente: agregar prenda"
-          >
-            <span aria-hidden="true">{'+'}</span>
-            {' Agregar prenda'}
-            <span className="ml-auto text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-              Próximamente
-            </span>
-          </button>
-
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary/5 border border-primary/20 text-sm font-medium text-primary/40 cursor-not-allowed"
-            aria-label="Próximamente: recomendaciones de outfits"
-          >
-            <span aria-hidden="true">{'✨'}</span>
-            {' ¿Qué me pongo hoy?'}
-            <span className="ml-auto text-xs bg-primary/10 text-primary/50 px-2 py-0.5 rounded-full">
-              Próximamente
-            </span>
-          </button>
-        </div>
+        )}
       </main>
     </div>
   )
