@@ -3,12 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS } from '@/lib/taxonomia'
+import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
+
+const TIPOS_VALIDOS = TODOS_LOS_TIPOS_VALORES as [string, ...string[]]
 
 const PrendaSchema = z.object({
   foto_path: z.string().min(1),
   categoria: z.enum(CATEGORIAS),
-  tipo: z.string().min(1),
+  tipo: z.enum(TIPOS_VALIDOS),
   color_principal: z.enum(COLORES),
   color_secundario: z.enum(COLORES).nullable().optional(),
   estilo: z.enum(ESTILOS),

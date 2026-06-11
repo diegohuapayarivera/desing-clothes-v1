@@ -9,6 +9,7 @@ import {
   TEMPORADAS,
   TODOS_LOS_TIPOS_VALORES,
   promptTaxonomia,
+  normalizarTipo,
 } from '@/lib/taxonomia'
 
 const TagsSchema = z.object({
@@ -21,7 +22,44 @@ const TagsSchema = z.object({
   temporada: z.enum(TEMPORADAS),
 })
 
+type Tags = z.infer<typeof TagsSchema>
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+/** Normalize raw AI output before Zod validation. */
+function normalizarRespuesta(raw: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...raw }
+
+  // Lowercase string fields before enum validation
+  if (typeof out.categoria === 'string') out.categoria = out.categoria.trim().toLowerCase()
+  if (typeof out.estilo === 'string') out.estilo = out.estilo.trim().toLowerCase()
+  if (typeof out.temporada === 'string') out.temporada = out.temporada.trim().toLowerCase()
+
+  // Normalize tipo with synonym map
+  out.tipo = normalizarTipo(out.tipo as string | null | undefined) ?? ''
+
+  // Normalize colors
+  if (typeof out.color_principal === 'string')
+    out.color_principal = out.color_principal.trim().toLowerCase()
+  if (
+    out.color_secundario == null ||
+    out.color_secundario === '' ||
+    out.color_secundario === 'null' ||
+    out.color_secundario === 'none' ||
+    out.color_secundario === 'ninguno'
+  ) {
+    out.color_secundario = null
+  } else if (typeof out.color_secundario === 'string') {
+    out.color_secundario = out.color_secundario.trim().toLowerCase()
+  }
+
+  // Normalize estampado
+  if (typeof out.estampado === 'string') {
+    out.estampado = out.estampado === 'true' || out.estampado === 'sí' || out.estampado === 'si'
+  }
+
+  return out
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -68,30 +106,29 @@ export async function POST(request: NextRequest) {
   }
 
   // Call Claude Haiku for auto-tagging
-  let tags: z.infer<typeof TagsSchema> | null = null
+  let tags: Tags | null = null
 
   try {
     const base64 = Buffer.from(imageBytes).toString('base64')
-    const prompt = `Analiza esta imagen de una prenda de ropa y clasifícala usando EXACTAMENTE los valores de esta taxonomía:
+
+    const prompt = `Analiza esta imagen de una prenda de ropa. Clasifícala usando ÚNICAMENTE los valores exactos de las listas que se muestran abajo.
+
+REGLAS OBLIGATORIAS:
+- Usa solo los valores de las listas, en minúsculas, exactamente como aparecen
+- No inventes valores nuevos ni uses inglés
+- Si no hay match perfecto, elige el valor más cercano de la lista
+- Responde SOLO con JSON válido, sin markdown, sin texto extra, sin comillas extra
 
 ${promptTaxonomia()}
 
-Responde ÚNICAMENTE con un objeto JSON válido, sin explicaciones, sin markdown, sin comillas extra:
-{
-  "categoria": "<valor exacto de CATEGORÍAS>",
-  "tipo": "<valor exacto de TIPOS>",
-  "color_principal": "<valor exacto de COLORES>",
-  "color_secundario": "<valor exacto de COLORES o null si no hay color secundario relevante>",
-  "estilo": "<valor exacto de ESTILOS>",
-  "estampado": <true si tiene estampado/patrón, false si es liso>,
-  "temporada": "<valor exacto de TEMPORADAS>"
-}
+Lista completa de tipos válidos: ${TODOS_LOS_TIPOS_VALORES.join(', ')}
 
-Tipos válidos: ${TODOS_LOS_TIPOS_VALORES.join(', ')}`
+Responde con este JSON exacto:
+{"categoria":"<valor>","tipo":"<valor>","color_principal":"<valor>","color_secundario":"<valor o null>","estilo":"<valor>","estampado":<true|false>,"temporada":"<valor>"}`
 
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      max_tokens: 256,
       messages: [
         {
           role: 'user',
@@ -109,37 +146,44 @@ Tipos válidos: ${TODOS_LOS_TIPOS_VALORES.join(', ')}`
     const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0])
-      // Normalize color_secundario: empty string → null
-      if (parsed.color_secundario === '' || parsed.color_secundario === 'null') {
-        parsed.color_secundario = null
-      }
-      const result = TagsSchema.safeParse(parsed)
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
+      const normalized = normalizarRespuesta(parsed)
+      const result = TagsSchema.safeParse(normalized)
+
       if (result.success) {
-        tags = result.data
+        // Ensure tipo is in taxonomy even after Zod passes
+        if (!TODOS_LOS_TIPOS_VALORES.includes(result.data.tipo)) {
+          tags = { ...result.data, tipo: '' } // blank → user picks manually
+        } else {
+          tags = result.data
+        }
       } else {
-        // Partial recovery: keep valid fields, null-out invalid ones
+        // Partial recovery: use normalized value where valid, null elsewhere
+        const issues = new Set(result.error.issues.map((i) => String(i.path[0])))
         tags = {
-          categoria: result.error.issues.some((i) => i.path[0] === 'categoria')
-            ? 'superior'
-            : (parsed.categoria as z.infer<typeof TagsSchema>['categoria']),
-          tipo: parsed.tipo ?? '',
-          color_principal: result.error.issues.some((i) => i.path[0] === 'color_principal')
+          categoria: issues.has('categoria') ? 'superior' : (normalized.categoria as Tags['categoria']),
+          tipo: TODOS_LOS_TIPOS_VALORES.includes(normalized.tipo as string)
+            ? (normalized.tipo as string)
+            : '',
+          color_principal: issues.has('color_principal')
             ? 'negro'
-            : (parsed.color_principal as z.infer<typeof TagsSchema>['color_principal']),
+            : (normalized.color_principal as Tags['color_principal']),
           color_secundario: null,
-          estilo: result.error.issues.some((i) => i.path[0] === 'estilo')
-            ? 'casual'
-            : (parsed.estilo as z.infer<typeof TagsSchema>['estilo']),
-          estampado: typeof parsed.estampado === 'boolean' ? parsed.estampado : false,
-          temporada: result.error.issues.some((i) => i.path[0] === 'temporada')
+          estilo: issues.has('estilo') ? 'casual' : (normalized.estilo as Tags['estilo']),
+          estampado: typeof normalized.estampado === 'boolean' ? normalized.estampado : false,
+          temporada: issues.has('temporada')
             ? 'todo_el_año'
-            : (parsed.temporada as z.infer<typeof TagsSchema>['temporada']),
+            : (normalized.temporada as Tags['temporada']),
         }
       }
     }
   } catch {
-    // AI failure is non-blocking — form will be empty for manual tagging
+    // AI failure is non-blocking — form shows empty for manual tagging
+  }
+
+  // Return empty string tipo as null so the form shows no pre-selection
+  if (tags && tags.tipo === '') {
+    tags = { ...tags, tipo: null as unknown as string }
   }
 
   return NextResponse.json({ foto_path: fotoPath, tags })

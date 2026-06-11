@@ -172,3 +172,80 @@ ESTILOS: ${ESTILOS.join(', ')}
 
 TEMPORADAS: ${TEMPORADAS.join(', ')}`
 }
+
+// ─── Normalización de tipo (para respuestas de IA) ────────────────────────────
+
+function quitarTildes(s: string): string {
+  return s.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+}
+
+const TIPO_SINONIMOS: Record<string, string> = {
+  // Inglés → valor en taxonomía
+  dress: 'vestido',
+  gown: 'vestido',
+  skirt: 'falda',
+  pants: 'pantalon',
+  trousers: 'pantalon',
+  shorts: 'short_mujer',
+  jacket: 'casaca',
+  coat: 'abrigo',
+  overcoat: 'abrigo',
+  sweater: 'chompa',
+  pullover: 'chompa',
+  jumper: 'chompa',
+  shirt: 'camisa',
+  'oxford shirt': 'camisa_oxford',
+  'oxford-shirt': 'camisa_oxford',
+  'button-down': 'camisa',
+  'button down': 'camisa',
+  't-shirt': 'camiseta',
+  tshirt: 'camiseta',
+  tee: 'camiseta',
+  blouse: 'blusa',
+  top: 'top',
+  suit: 'terno',
+  overalls: 'enterizo',
+  overall: 'enterizo',
+  sneakers: 'zapatillas',
+  sneaker: 'zapatillas',
+  trainers: 'zapatillas',
+  shoes: 'zapatos_vestir',
+  heels: 'tacos',
+  'high heels': 'tacos',
+  boots: 'botas',
+  boot: 'botas',
+  sandals: 'sandalias',
+  sandal: 'sandalias',
+  loafers: 'mocasines',
+  loafer: 'mocasines',
+  bag: 'bolso',
+  handbag: 'cartera',
+  purse: 'cartera',
+  belt: 'correa',
+  hat: 'gorro',
+  cap: 'gorro',
+  scarf: 'bufanda',
+  glasses: 'lentes',
+  sunglasses: 'lentes',
+  tie: 'corbata',
+  necktie: 'corbata',
+  // Variantes en español con tilde o espacios
+  pantalon: 'pantalon',
+  'zapatos de vestir': 'zapatos_vestir',
+  'camisa oxford': 'camisa_oxford',
+}
+
+/** Recibe cualquier string que devuelva la IA y retorna el valor canónico de
+ *  la taxonomía, o `null` si no hay match (el usuario deberá elegir manualmente). */
+export function normalizarTipo(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null
+  const limpio = raw.trim().toLowerCase()
+  // 1) Match directo en minúsculas
+  if (TODOS_LOS_TIPOS_VALORES.includes(limpio)) return limpio
+  // 2) Match sin tildes
+  const sinTildes = quitarTildes(limpio)
+  const porTildes = TODOS_LOS_TIPOS_VALORES.find((v) => quitarTildes(v) === sinTildes)
+  if (porTildes) return porTildes
+  // 3) Sinónimos (con y sin tildes)
+  return TIPO_SINONIMOS[limpio] ?? TIPO_SINONIMOS[sinTildes] ?? null
+}
