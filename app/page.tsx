@@ -1,65 +1,181 @@
-import Image from "next/image";
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { signOut } from './actions'
+import type { Profile } from '@/types'
 
-export default function Home() {
+function HangerIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <svg
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M32 6C32 6 32 13 32 15.5C32 18 34 20 36.5 20C39 20 41 18 41 15.5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M32 20L8 48H56L32 20Z"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path d="M16 56H48" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M16 48V56M48 48V56" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function EmptyClosetIllustration() {
+  return (
+    <svg
+      viewBox="0 0 160 140"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-40 h-36 text-primary/20"
+      aria-hidden="true"
+    >
+      <rect x="10" y="20" width="140" height="110" rx="8" stroke="currentColor" strokeWidth="2.5" />
+      <line x1="80" y1="20" x2="80" y2="130" stroke="currentColor" strokeWidth="2" />
+      <line x1="10" y1="50" x2="80" y2="50" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
+      <line x1="80" y1="50" x2="150" y2="50" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
+      <circle cx="72" cy="78" r="4" stroke="currentColor" strokeWidth="2" />
+      <circle cx="88" cy="78" r="4" stroke="currentColor" strokeWidth="2" />
+      <path d="M35 35 L35 37.5 C35 38.5 36 39 37 39 C38 39 39 38.5 39 37.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M35 39 L26 52 L44 52 Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M115 35 L115 37.5 C115 38.5 116 39 117 39 C118 39 119 38.5 119 37.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M115 39 L106 52 L124 52 Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="25" y1="130" x2="25" y2="140" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="135" y1="130" x2="135" y2="140" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export default async function HomePage() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single<Profile>()
+
+  if (!profile?.onboarding_completado) {
+    redirect('/onboarding')
+  }
+
+  const initials = profile.nombre
+    ? profile.nombre
+        .split(' ')
+        .slice(0, 2)
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+    : '?'
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Nav */}
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border/60">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+              <HangerIcon className="w-4 h-4 text-primary" />
+            </div>
+            <span
+              className="text-base font-light text-foreground"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Clóset Digital
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center">
+              <span className="text-xs font-semibold text-primary">{initials}</span>
+            </div>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted cursor-pointer"
+                aria-label="Cerrar sesión"
+              >
+                Salir
+              </button>
+            </form>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
+        {/* Greeting */}
+        <div className="mb-8 animate-fade-up">
+          <p className="text-sm text-muted-foreground mb-1">Bienvenida de vuelta</p>
+          <h1
+            className="text-3xl font-light text-foreground leading-tight"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Hola, {profile.nombre?.split(' ')[0]} ✦
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+        </div>
+
+        {/* Empty state */}
+        <div className="flex flex-col items-center text-center py-12 px-6 animate-fade-up delay-100">
+          <div className="mb-6 opacity-70">
+            <EmptyClosetIllustration />
+          </div>
+          <h2
+            className="text-xl font-light text-foreground mb-2"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Tu clóset está vacío
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+            Agrega tus prendas para empezar a recibir recomendaciones personalizadas.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* CTA buttons */}
+        <div className="space-y-3 animate-fade-up delay-200">
+          <button
+            disabled
+            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-border text-sm font-medium text-muted-foreground cursor-not-allowed opacity-50"
+            aria-label="Próximamente: agregar prenda"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <span aria-hidden="true">{'+'}</span>
+            {' Agregar prenda'}
+            <span className="ml-auto text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+              Próximamente
+            </span>
+          </button>
+
+          <button
+            disabled
+            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary/5 border border-primary/20 text-sm font-medium text-primary/40 cursor-not-allowed"
+            aria-label="Próximamente: recomendaciones de outfits"
           >
-            Documentation
-          </a>
+            <span aria-hidden="true">{'✨'}</span>
+            {' ¿Qué me pongo hoy?'}
+            <span className="ml-auto text-xs bg-primary/10 text-primary/50 px-2 py-0.5 rounded-full">
+              Próximamente
+            </span>
+          </button>
         </div>
       </main>
     </div>
-  );
+  )
 }
