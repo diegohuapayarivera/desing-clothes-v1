@@ -221,7 +221,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
@@ -229,8 +229,8 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
         aria-hidden="true"
       />
 
-      {/* Sheet */}
-      <div className="relative bg-background rounded-t-3xl w-full max-w-lg mx-auto max-h-[92dvh] flex flex-col shadow-2xl animate-fade-up">
+      {/* Card flotante — rounded-3xl en los 4 bordes, sin corner bleed */}
+      <div className="relative bg-background rounded-3xl overflow-hidden w-full max-w-lg mx-auto max-h-[92dvh] flex flex-col shadow-2xl animate-fade-up">
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />

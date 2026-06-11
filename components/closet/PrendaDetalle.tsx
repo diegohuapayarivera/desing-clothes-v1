@@ -100,13 +100,13 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3" role="dialog" aria-modal="true">
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative bg-background rounded-t-3xl w-full max-w-lg mx-auto max-h-[90dvh] flex flex-col shadow-2xl animate-fade-up">
+      <div className="relative bg-background rounded-3xl overflow-hidden w-full max-w-lg mx-auto max-h-[90dvh] flex flex-col shadow-2xl animate-fade-up">
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />
