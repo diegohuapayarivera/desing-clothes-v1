@@ -11,7 +11,7 @@ import {
   CATEGORIA_EMOJIS,
   ESTILO_LABELS,
   TEMPORADA_LABELS,
-  COLOR_HEX,
+  colorBgStyle,
   tiposPorCategoria,
   type Categoria,
   type Color,
@@ -145,9 +145,9 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
               <div className="grid grid-cols-2 gap-3">
                 <TagPill label="Categoría" value={`${CATEGORIA_EMOJIS[prenda.categoria]} ${CATEGORIA_LABELS[prenda.categoria]}`} />
                 <TagPill label="Tipo" value={prenda.tipo.replace(/_/g, ' ')} capitalize />
-                <TagPill label="Color principal" value={prenda.color_principal} dot={COLOR_HEX[prenda.color_principal]} capitalize />
+                <TagPill label="Color principal" value={prenda.color_principal} colorDot={prenda.color_principal} capitalize />
                 {prenda.color_secundario && (
-                  <TagPill label="Color secundario" value={prenda.color_secundario} dot={COLOR_HEX[prenda.color_secundario]} capitalize />
+                  <TagPill label="Color secundario" value={prenda.color_secundario} colorDot={prenda.color_secundario} capitalize />
                 )}
                 <TagPill label="Estilo" value={ESTILO_LABELS[prenda.estilo]} />
                 <TagPill label="Temporada" value={TEMPORADA_LABELS[prenda.temporada]} />
@@ -283,11 +283,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                     >
                       <span
                         className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                        style={
-                          c === 'multicolor'
-                            ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                            : { background: COLOR_HEX[c] }
-                        }
+                        style={colorBgStyle(c)}
                       />
                       <span className="truncate capitalize">{c}</span>
                     </button>
@@ -328,11 +324,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                     >
                       <span
                         className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                        style={
-                          c === 'multicolor'
-                            ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                            : { background: COLOR_HEX[c] }
-                        }
+                        style={colorBgStyle(c)}
                       />
                       <span className="truncate capitalize">{c}</span>
                     </button>
@@ -438,26 +430,22 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
 function TagPill({
   label,
   value,
-  dot,
+  colorDot,
   capitalize,
 }: {
   label: string
   value: string
-  dot?: string
+  colorDot?: Color
   capitalize?: boolean
 }) {
   return (
     <div className="bg-muted/50 rounded-xl px-3 py-2.5">
       <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
       <div className="flex items-center gap-1.5">
-        {dot && (
+        {colorDot && (
           <span
             className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-            style={
-              dot.includes('gradient')
-                ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                : { background: dot }
-            }
+            style={colorBgStyle(colorDot)}
           />
         )}
         <p className={`text-sm font-medium text-foreground ${capitalize ? 'capitalize' : ''}`}>

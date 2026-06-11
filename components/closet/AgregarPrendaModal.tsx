@@ -12,7 +12,7 @@ import {
   CATEGORIA_EMOJIS,
   ESTILO_LABELS,
   TEMPORADA_LABELS,
-  COLOR_HEX,
+  colorBgStyle,
   tiposPorCategoria,
   type Categoria,
   type Color,
@@ -516,9 +516,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                         ].join(' ')}
                         aria-pressed={selected} title={c}>
                         <span className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                          style={c === 'multicolor'
-                            ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                            : { background: COLOR_HEX[c] }} />
+                          style={colorBgStyle(c)} />
                         <span className="truncate leading-tight capitalize">{c}</span>
                       </button>
                     )
@@ -556,9 +554,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                         ].join(' ')}
                         aria-pressed={selected} title={c}>
                         <span className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10"
-                          style={c === 'multicolor'
-                            ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                            : { background: COLOR_HEX[c] }} />
+                          style={colorBgStyle(c)} />
                         <span className="truncate leading-tight capitalize">{c}</span>
                       </button>
                     )

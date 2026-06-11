@@ -10,6 +10,8 @@ import {
   TODOS_LOS_TIPOS_VALORES,
   promptTaxonomia,
   normalizarTipo,
+  normalizarColor,
+  normalizarTemporada,
 } from '@/lib/taxonomia'
 
 const TagsSchema = z.object({
@@ -33,14 +35,17 @@ function normalizarRespuesta(raw: Record<string, unknown>): Record<string, unkno
   // Lowercase string fields before enum validation
   if (typeof out.categoria === 'string') out.categoria = out.categoria.trim().toLowerCase()
   if (typeof out.estilo === 'string') out.estilo = out.estilo.trim().toLowerCase()
-  if (typeof out.temporada === 'string') out.temporada = out.temporada.trim().toLowerCase()
+  if (typeof out.temporada === 'string') {
+    out.temporada = normalizarTemporada(out.temporada) ?? out.temporada.trim().toLowerCase()
+  }
 
   // Normalize tipo with synonym map
   out.tipo = normalizarTipo(out.tipo as string | null | undefined) ?? ''
 
-  // Normalize colors
-  if (typeof out.color_principal === 'string')
-    out.color_principal = out.color_principal.trim().toLowerCase()
+  // Normalize colors with synonym map
+  if (typeof out.color_principal === 'string') {
+    out.color_principal = normalizarColor(out.color_principal) ?? out.color_principal.trim().toLowerCase()
+  }
   if (
     out.color_secundario == null ||
     out.color_secundario === '' ||
@@ -50,7 +55,7 @@ function normalizarRespuesta(raw: Record<string, unknown>): Record<string, unkno
   ) {
     out.color_secundario = null
   } else if (typeof out.color_secundario === 'string') {
-    out.color_secundario = out.color_secundario.trim().toLowerCase()
+    out.color_secundario = normalizarColor(out.color_secundario) ?? out.color_secundario.trim().toLowerCase()
   }
 
   // Normalize estampado

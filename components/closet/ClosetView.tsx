@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { PrendaDetalle } from './PrendaDetalle'
 import { AgregarPrendaModal } from './AgregarPrendaModal'
-import { CATEGORIAS, COLORES, CATEGORIA_LABELS, CATEGORIA_EMOJIS, COLOR_HEX } from '@/lib/taxonomia'
+import { CATEGORIAS, COLORES, CATEGORIA_LABELS, CATEGORIA_EMOJIS, colorBgStyle } from '@/lib/taxonomia'
 import type { PrendaConUrl, PreferenciaPrendas } from '@/types'
 import type { Categoria, Color } from '@/lib/taxonomia'
 
@@ -89,7 +89,6 @@ export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {COLORES.map((color) => {
             const active = filtroColores.has(color)
-            const hex = COLOR_HEX[color]
             return (
               <button
                 key={color}
@@ -105,11 +104,7 @@ export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario
               >
                 <span
                   className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-                  style={
-                    color === 'multicolor'
-                      ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                      : { background: hex }
-                  }
+                  style={colorBgStyle(color)}
                 />
                 <span className="capitalize">{color}</span>
               </button>
@@ -188,8 +183,6 @@ export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario
 }
 
 function PrendaCard({ prenda, onClick }: { prenda: PrendaConUrl; onClick: () => void }) {
-  const hex = COLOR_HEX[prenda.color_principal]
-
   return (
     <button
       type="button"
@@ -217,11 +210,7 @@ function PrendaCard({ prenda, onClick }: { prenda: PrendaConUrl; onClick: () => 
           {/* Color dot */}
           <span
             className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-            style={
-              prenda.color_principal === 'multicolor'
-                ? { background: 'linear-gradient(135deg,#f06,#a0f,#0af)' }
-                : { background: hex }
-            }
+            style={colorBgStyle(prenda.color_principal)}
             title={prenda.color_principal}
           />
           <span className="text-xs text-muted-foreground capitalize">{prenda.color_principal}</span>

@@ -50,24 +50,22 @@ interface TipoEntry {
 
 export const TODOS_LOS_TIPOS: TipoEntry[] = [
   // Superior
-  { valor: 'polo', label: 'Polo', genero: 'hombre', categoria: 'superior' },
+  { valor: 'polo', label: 'Polo', genero: 'ambas', categoria: 'superior' },
   { valor: 'camisa', label: 'Camisa', genero: 'hombre', categoria: 'superior' },
   { valor: 'blusa', label: 'Blusa', genero: 'mujer', categoria: 'superior' },
   { valor: 'top', label: 'Top', genero: 'mujer', categoria: 'superior' },
   { valor: 'camiseta', label: 'Camiseta', genero: 'ambas', categoria: 'superior' },
   { valor: 'camisa_oxford', label: 'Camisa oxford', genero: 'ambas', categoria: 'superior' },
-  // Inferior
-  { valor: 'pantalon', label: 'Pantalón', genero: 'hombre', categoria: 'inferior' },
+  // Inferior — pantalon y short son unisex
+  { valor: 'pantalon', label: 'Pantalón', genero: 'ambas', categoria: 'inferior' },
   { valor: 'jean', label: 'Jean', genero: 'ambas', categoria: 'inferior' },
-  { valor: 'short_hombre', label: 'Short', genero: 'hombre', categoria: 'inferior' },
+  { valor: 'short', label: 'Short', genero: 'ambas', categoria: 'inferior' },
   { valor: 'falda', label: 'Falda', genero: 'mujer', categoria: 'inferior' },
-  { valor: 'short_mujer', label: 'Short', genero: 'mujer', categoria: 'inferior' },
   { valor: 'leggings', label: 'Leggings', genero: 'mujer', categoria: 'inferior' },
-  // Cuerpo completo
+  // Cuerpo completo — enterizo reemplaza jumpsuit, es unisex
   { valor: 'vestido', label: 'Vestido', genero: 'mujer', categoria: 'cuerpo_completo' },
-  { valor: 'enterizo', label: 'Enterizo', genero: 'mujer', categoria: 'cuerpo_completo' },
+  { valor: 'enterizo', label: 'Enterizo', genero: 'ambas', categoria: 'cuerpo_completo' },
   { valor: 'terno', label: 'Terno', genero: 'hombre', categoria: 'cuerpo_completo' },
-  { valor: 'jumpsuit', label: 'Jumpsuit', genero: 'ambas', categoria: 'cuerpo_completo' },
   // Abrigo
   { valor: 'casaca', label: 'Casaca', genero: 'ambas', categoria: 'abrigo' },
   { valor: 'chompa', label: 'Chompa', genero: 'ambas', categoria: 'abrigo' },
@@ -153,7 +151,21 @@ export const COLOR_HEX: Record<Color, string> = {
   verde: '#43a047',
   'verde oliva': '#827717',
   morado: '#7b1fa2',
-  multicolor: 'linear-gradient(135deg, #f06,#a0f,#0af)',
+  multicolor: '#808080', // fallback sólido; renderizar con colorBgStyle()
+}
+
+/**
+ * Devuelve el estilo CSS correcto para un chip/dot de color.
+ * Usa backgroundImage para el gradiente de multicolor,
+ * backgroundColor para colores sólidos.
+ */
+export function colorBgStyle(
+  color: Color,
+): { backgroundColor?: string; backgroundImage?: string } {
+  if (color === 'multicolor') {
+    return { backgroundImage: 'linear-gradient(135deg, #f06, #a0f, #0af)' }
+  }
+  return { backgroundColor: COLOR_HEX[color] }
 }
 
 // ─── Valores para prompt de IA ─────────────────────────────────────────────────
@@ -164,7 +176,12 @@ export function promptTaxonomia(): string {
   return `CATEGORÍAS: ${CATEGORIAS.join(', ')}
 
 TIPOS (por categoría):
-${CATEGORIAS.map((c) => `  ${c}: ${TODOS_LOS_TIPOS.filter((t) => t.categoria === c).map((t) => t.valor).join(', ')}`).join('\n')}
+${CATEGORIAS.map(
+  (c) =>
+    `  ${c}: ${TODOS_LOS_TIPOS.filter((t) => t.categoria === c)
+      .map((t) => t.valor)
+      .join(', ')}`,
+).join('\n')}
 
 COLORES: ${COLORES.join(', ')}
 
@@ -173,11 +190,13 @@ ESTILOS: ${ESTILOS.join(', ')}
 TEMPORADAS: ${TEMPORADAS.join(', ')}`
 }
 
-// ─── Normalización de tipo (para respuestas de IA) ────────────────────────────
+// ─── Helpers internos ────────────────────────────────────────────────────────
 
 function quitarTildes(s: string): string {
   return s.normalize('NFD').replace(/\p{Diacritic}/gu, '')
 }
+
+// ─── Normalización de tipo ────────────────────────────────────────────────────
 
 const TIPO_SINONIMOS: Record<string, string> = {
   // Inglés → valor en taxonomía
@@ -186,7 +205,8 @@ const TIPO_SINONIMOS: Record<string, string> = {
   skirt: 'falda',
   pants: 'pantalon',
   trousers: 'pantalon',
-  shorts: 'short_mujer',
+  shorts: 'short',
+  short: 'short',
   jacket: 'casaca',
   coat: 'abrigo',
   overcoat: 'abrigo',
@@ -202,20 +222,20 @@ const TIPO_SINONIMOS: Record<string, string> = {
   tshirt: 'camiseta',
   tee: 'camiseta',
   blouse: 'blusa',
-  top: 'top',
   suit: 'terno',
   overalls: 'enterizo',
   overall: 'enterizo',
+  jumpsuit: 'enterizo',
+  'jump suit': 'enterizo',
   sneakers: 'zapatillas',
   sneaker: 'zapatillas',
   trainers: 'zapatillas',
-  shoes: 'zapatos_vestir',
-  heels: 'tacos',
-  'high heels': 'tacos',
   boots: 'botas',
   boot: 'botas',
   sandals: 'sandalias',
   sandal: 'sandalias',
+  heels: 'tacos',
+  'high heels': 'tacos',
   loafers: 'mocasines',
   loafer: 'mocasines',
   bag: 'bolso',
@@ -229,23 +249,129 @@ const TIPO_SINONIMOS: Record<string, string> = {
   sunglasses: 'lentes',
   tie: 'corbata',
   necktie: 'corbata',
-  // Variantes en español con tilde o espacios
-  pantalon: 'pantalon',
+  // Variantes en español
   'zapatos de vestir': 'zapatos_vestir',
   'camisa oxford': 'camisa_oxford',
 }
 
-/** Recibe cualquier string que devuelva la IA y retorna el valor canónico de
- *  la taxonomía, o `null` si no hay match (el usuario deberá elegir manualmente). */
 export function normalizarTipo(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== 'string') return null
   const limpio = raw.trim().toLowerCase()
-  // 1) Match directo en minúsculas
   if (TODOS_LOS_TIPOS_VALORES.includes(limpio)) return limpio
-  // 2) Match sin tildes
   const sinTildes = quitarTildes(limpio)
   const porTildes = TODOS_LOS_TIPOS_VALORES.find((v) => quitarTildes(v) === sinTildes)
   if (porTildes) return porTildes
-  // 3) Sinónimos (con y sin tildes)
   return TIPO_SINONIMOS[limpio] ?? TIPO_SINONIMOS[sinTildes] ?? null
+}
+
+// ─── Normalización de color ────────────────────────────────────────────────────
+
+const COLOR_SINONIMOS: Record<string, Color> = {
+  // Inglés
+  black: 'negro',
+  white: 'blanco',
+  gray: 'gris',
+  grey: 'gris',
+  silver: 'gris',
+  brown: 'marrón',
+  navy: 'azul marino',
+  'navy blue': 'azul marino',
+  'dark blue': 'azul marino',
+  blue: 'azul marino',
+  'light blue': 'celeste',
+  'sky blue': 'celeste',
+  'light-blue': 'celeste',
+  'sky-blue': 'celeste',
+  cyan: 'celeste',
+  red: 'rojo',
+  wine: 'vino',
+  burgundy: 'vino',
+  maroon: 'vino',
+  pink: 'rosado',
+  fuchsia: 'rosado',
+  magenta: 'rosado',
+  orange: 'naranja',
+  coral: 'naranja',
+  yellow: 'amarillo',
+  gold: 'amarillo',
+  green: 'verde',
+  olive: 'verde oliva',
+  'olive green': 'verde oliva',
+  purple: 'morado',
+  violet: 'morado',
+  lavender: 'morado',
+  lilac: 'morado',
+  beige: 'beige',
+  cream: 'beige',
+  ivory: 'beige',
+  tan: 'beige',
+  khaki: 'beige',
+  multicolor: 'multicolor',
+  'multi-color': 'multicolor',
+  multicolored: 'multicolor',
+  colorful: 'multicolor',
+  // Español variantes/sinónimos
+  guinda: 'vino',
+  burdeos: 'vino',
+  granate: 'vino',
+  plomo: 'gris',
+  plateado: 'gris',
+  crema: 'beige',
+  hueso: 'beige',
+  turquesa: 'celeste',
+  azul: 'azul marino',
+  'azul claro': 'celeste',
+  'azul cielo': 'celeste',
+  café: 'marrón',
+  cafe: 'marrón',
+  lila: 'morado',
+  violeta: 'morado',
+  fucsia: 'rosado',
+  rosa: 'rosado',
+  salmón: 'rosado',
+  salmon: 'rosado',
+  dorado: 'amarillo',
+}
+
+export function normalizarColor(raw: string | null | undefined): Color | null {
+  if (!raw || typeof raw !== 'string') return null
+  const limpio = raw.trim().toLowerCase()
+  if ((COLORES as readonly string[]).includes(limpio)) return limpio as Color
+  const sinTildes = quitarTildes(limpio)
+  const porTildes = COLORES.find((v) => quitarTildes(v) === sinTildes)
+  if (porTildes) return porTildes
+  return COLOR_SINONIMOS[limpio] ?? COLOR_SINONIMOS[sinTildes] ?? null
+}
+
+// ─── Normalización de temporada ────────────────────────────────────────────────
+
+const TEMPORADA_SINONIMOS: Record<string, Temporada> = {
+  summer: 'verano',
+  spring: 'verano',
+  winter: 'invierno',
+  fall: 'invierno',
+  autumn: 'invierno',
+  'all year': 'todo_el_año',
+  'all-year': 'todo_el_año',
+  'all season': 'todo_el_año',
+  'all-season': 'todo_el_año',
+  'all seasons': 'todo_el_año',
+  'year round': 'todo_el_año',
+  'year-round': 'todo_el_año',
+  'todo año': 'todo_el_año',
+  'todo el ano': 'todo_el_año',
+}
+
+export function normalizarTemporada(raw: string | null | undefined): Temporada | null {
+  if (!raw || typeof raw !== 'string') return null
+  const limpio = raw.trim().toLowerCase()
+  if ((TEMPORADAS as readonly string[]).includes(limpio)) return limpio as Temporada
+  const sinTildes = quitarTildes(limpio)
+  const porTildes = TEMPORADAS.find((v) => quitarTildes(v) === sinTildes)
+  if (porTildes) return porTildes
+  // Normaliza espacios a guiones bajos para temporadas compuestas
+  const conGuion = sinTildes.replace(/\s+/g, '_')
+  const porGuion = TEMPORADAS.find((v) => quitarTildes(v) === conGuion)
+  if (porGuion) return porGuion
+  return TEMPORADA_SINONIMOS[limpio] ?? TEMPORADA_SINONIMOS[sinTildes] ?? null
 }
