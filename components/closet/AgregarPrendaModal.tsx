@@ -102,7 +102,8 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     estampado: false,
     temporada: 'todo_el_año',
   })
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const [, startTransition] = useTransition()
 
   const tiposDisponibles =
@@ -215,7 +216,8 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
       estampado: false,
       temporada: 'todo_el_año',
     })
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
+    if (galleryInputRef.current) galleryInputRef.current.value = ''
   }
 
   return (
@@ -253,33 +255,81 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
         <div className="flex-1 overflow-y-auto px-5 pb-8">
           {/* ── Step: capture ── */}
           {step === 'capture' && (
-            <div className="flex flex-col items-center justify-center py-10 gap-6">
-              <div className="w-24 h-24 rounded-2xl bg-accent/40 flex items-center justify-center text-4xl">
-                📷
+            <div className="flex flex-col py-6 gap-8">
+              {/* Illustration */}
+              <div className="flex flex-col items-center gap-3 pt-2">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-36 h-36 rounded-full bg-accent/30" />
+                  <svg
+                    viewBox="0 0 64 64"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="absolute w-16 h-16 text-primary/60"
+                    aria-hidden="true"
+                  >
+                    <path d="M32 8C32 8 32 15 32 17C32 19.2 33.8 21 36 21C38.2 21 40 19.2 40 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+                    <path d="M32 21L10 48H54L32 21Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    <path d="M18 54H46" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                    <path d="M18 48V54M46 48V54" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p
+                    className="text-lg font-light text-foreground"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    ¿Qué prenda agregas?
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    La IA la etiquetará automáticamente
+                  </p>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-sm text-foreground font-medium mb-1">
-                  Toma una foto de tu prenda
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  La IA la etiquetará automáticamente
-                </p>
-              </div>
+
+              {/* Inputs ocultos — uno por fuente */}
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold transition-all hover:opacity-90 active:scale-95"
-              >
-                Abrir cámara / galería
-              </button>
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {/* Botones de acción */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 shrink-0" aria-hidden="true">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  <span>Tomar foto</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl border-2 border-border bg-card text-foreground text-sm font-medium hover:border-primary/40 hover:bg-accent/20 active:scale-[0.98] transition-all"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 shrink-0 text-primary" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" strokeWidth="2"/>
+                    <path d="m21 15-5-5L5 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>Elegir de galería</span>
+                </button>
+              </div>
             </div>
           )}
 
