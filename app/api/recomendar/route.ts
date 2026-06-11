@@ -35,6 +35,58 @@ const ResponseSchema = z.object({
 
 type PrendaIA = z.infer<typeof PrendaIASchema>
 
+interface PersonalizacionCtx {
+  favoritos: string[]
+  rechazados: string[]
+  savedSets: string[][]
+}
+
+async function fetchPersonalizacion(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ocasion: Ocasion,
+  prendasById: Map<string, PrendaIA>,
+): Promise<PersonalizacionCtx> {
+  const describir = (ids: unknown) => {
+    const arr = Array.isArray(ids) ? (ids as string[]) : []
+    return arr
+      .map((id) => prendasById.get(id))
+      .filter((p): p is PrendaIA => p != null)
+      .map((p) => `${p.tipo.replaceAll('_', ' ')} ${p.color_principal}`)
+      .join(' + ')
+  }
+
+  const [{ data: conjOcasion }, { data: conjGeneral }, { data: feedbackData }] = await Promise.all([
+    supabase
+      .from('conjuntos')
+      .select('prenda_ids')
+      .eq('ocasion', ocasion)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('conjuntos')
+      .select('prenda_ids')
+      .neq('ocasion', ocasion)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('feedback_outfits')
+      .select('prenda_ids')
+      .order('created_at', { ascending: false })
+      .limit(10),
+  ])
+
+  const allFavs = [...(conjOcasion ?? []), ...(conjGeneral ?? [])].slice(0, 10)
+  const favoritos = allFavs.map((c) => describir(c.prenda_ids)).filter(Boolean)
+  const savedSets = allFavs.map((c) =>
+    (Array.isArray(c.prenda_ids) ? (c.prenda_ids as string[]) : []).sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  )
+  const rechazados = (feedbackData ?? []).map((f) => describir(f.prenda_ids)).filter(Boolean)
+
+  return { favoritos, rechazados, savedSets }
+}
+
 const CLIMA_LABELS: Record<NivelClima, string> = {
   frio: 'frío (< 15°C)',
   templado: 'templado (15-22°C)',
@@ -45,6 +97,7 @@ function buildPrompt(
   prendas: PrendaIA[],
   ocasion: Ocasion,
   clima: NivelClima,
+  personalizacion: PersonalizacionCtx,
   avoid?: string[][],
 ): string {
   const prendasJson = JSON.stringify(
@@ -64,10 +117,20 @@ function buildPrompt(
       ? `\nEvita repetir exactamente estas combinaciones ya mostradas (por sus IDs): ${avoid.map((ids) => ids.join('+')).join('; ')}.`
       : ''
 
+  const favNote =
+    personalizacion.favoritos.length > 0
+      ? `\nEstilo personal (favoritos guardados): ${personalizacion.favoritos.join(' | ')}.`
+      : ''
+
+  const rechazadosNote =
+    personalizacion.rechazados.length > 0
+      ? `\nCombinaciones rechazadas anteriormente (no repetir tal cual): ${personalizacion.rechazados.join(' | ')}.`
+      : ''
+
   return `Eres un estilista experto en moda. El usuario tiene estas prendas disponibles:
 ${prendasJson}
 
-Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}
+Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}${favNote}${rechazadosNote}
 
 REGLAS OBLIGATORIAS — un conjunto que viole cualquier regla es inválido:
 1. ESTRUCTURA: (exactamente 1 "superior" + exactamente 1 "inferior") O (exactamente 1 "cuerpo_completo"). Nunca mezclar cuerpo_completo con superior o inferior.
@@ -77,6 +140,7 @@ REGLAS OBLIGATORIAS — un conjunto que viole cualquier regla es inválido:
 5. ESTAMPADO: Máximo 1 prenda con estampado=true por conjunto.
 6. COLORES: Combina bien. Neutros (negro, blanco, gris, beige, marrón) van con todo. Evita choques entre colores intensos. Máximo 2 colores vivos por conjunto.
 7. Usa SOLO los IDs de la lista dada. No inventes ni repitas IDs.
+${favNote ? '8. Considera el estilo personal reflejado en los favoritos sin repetir conjuntos idénticos.' : ''}
 
 Justificación: 1 frase corta, natural y cercana en español (ej: "El azul marino eleva el blanco para una noche elegante").
 
@@ -89,7 +153,9 @@ function validateOutfit(
   prendasById: Map<string, PrendaIA>,
   clima: NivelClima,
 ): string | null {
-  const items = outfit.prenda_ids.map((id) => prendasById.get(id)).filter(Boolean) as PrendaIA[]
+  const items = outfit.prenda_ids
+    .map((id) => prendasById.get(id))
+    .filter((p): p is PrendaIA => p != null)
 
   if (items.length !== outfit.prenda_ids.length) return 'Contiene IDs no válidos'
 
@@ -119,16 +185,17 @@ async function callClaude(
   prendas: PrendaIA[],
   ocasion: Ocasion,
   clima: NivelClima,
+  personalizacion: PersonalizacionCtx,
   avoid?: string[][],
 ): Promise<{ prenda_ids: string[]; justificacion: string }[]> {
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, avoid) }],
+    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid) }],
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  const jsonMatch = /\{[\s\S]*\}/.exec(text)
   if (!jsonMatch) throw new Error('No JSON in response')
 
   const parsed = JSON.parse(jsonMatch[0])
@@ -159,28 +226,35 @@ export async function POST(request: NextRequest) {
   const { prendas, ocasion, clima, avoid } = body
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
 
+  const personalizacion = await fetchPersonalizacion(supabase, ocasion, prendasById)
+
   const filter = (raw: { prenda_ids: string[]; justificacion: string }[]) =>
     raw.filter((o) => validateOutfit(o, prendasById, clima) === null)
 
   const deduplicar = (outfits: { prenda_ids: string[]; justificacion: string }[]) => {
     const seen = new Set<string>()
     return outfits.filter((o) => {
-      const key = [...o.prenda_ids].sort().join(',')
+      const key = [...o.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
   }
 
+  const isSavedAlready = (outfit: { prenda_ids: string[] }) => {
+    const key = [...outfit.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')
+    return personalizacion.savedSets.some((s) => s.join(',') === key)
+  }
+
   try {
-    const primera = await callClaude(prendas, ocasion, clima, avoid)
-    let validos = filter(primera)
+    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid)
+    let validos = filter(primera).filter((o) => !isSavedAlready(o))
 
     if (validos.length < 2) {
       try {
         const retryAvoid = [...(avoid ?? []), ...validos.map((o) => o.prenda_ids)]
-        const segunda = await callClaude(prendas, ocasion, clima, retryAvoid)
-        validos = deduplicar([...validos, ...filter(segunda)])
+        const segunda = await callClaude(prendas, ocasion, clima, personalizacion, retryAvoid)
+        validos = deduplicar([...validos, ...filter(segunda).filter((o) => !isSavedAlready(o))])
       } catch {}
     }
 

@@ -34,6 +34,28 @@ export interface Prenda {
 
 export type PrendaConUrl = Prenda & { signedUrl: string }
 
+export interface Conjunto {
+  id: string
+  user_id: string
+  prenda_ids: string[]
+  ocasion: string
+  clima: string | null
+  justificacion: string | null
+  nombre: string | null
+  origen: 'ia' | 'manual'
+  created_at: string
+}
+
+export interface FeedbackOutfit {
+  id: string
+  user_id: string
+  prenda_ids: string[]
+  ocasion: string | null
+  clima: string | null
+  accion: 'descartado' | 'regenerado'
+  created_at: string
+}
+
 export interface TagsIA {
   categoria: Categoria
   tipo: string

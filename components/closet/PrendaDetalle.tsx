@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { deletePrenda, updatePrendaTags } from '@/app/closet/actions'
+import { deletePrenda, updatePrendaTags, countConjuntosForPrenda } from '@/app/closet/actions'
 import {
   CATEGORIAS,
   COLORES,
@@ -50,6 +50,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
   const [editEstampado, setEditEstampado] = useState<boolean>(prenda.estampado)
   const [editTemporada, setEditTemporada] = useState<Temporada>(prenda.temporada)
   const [isSaving, setIsSaving] = useState(false)
+  const [conjuntosCount, setConjuntosCount] = useState(0)
 
   const tiposDisponibles = tiposPorCategoria(editCat, preferencia)
 
@@ -166,9 +167,15 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                   <p className="text-sm font-medium text-foreground">
                     ¿Eliminar esta prenda?
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Se borrará la foto y todos sus datos. Esta acción no se puede deshacer.
-                  </p>
+                  {conjuntosCount > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Esta prenda está en <strong>{conjuntosCount} {conjuntosCount === 1 ? 'conjunto guardado' : 'conjuntos guardados'}</strong>. Al eliminarla, esos conjuntos también se borrarán. Esta acción no se puede deshacer.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Se borrará la foto y todos sus datos. Esta acción no se puede deshacer.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -207,7 +214,10 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMode('confirmDelete')}
+                    onClick={() => {
+                      countConjuntosForPrenda(prenda.id).then(setConjuntosCount).catch(() => null)
+                      setMode('confirmDelete')
+                    }}
                     className="px-4 py-3 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/5 transition-all active:scale-95"
                     aria-label="Eliminar prenda"
                   >

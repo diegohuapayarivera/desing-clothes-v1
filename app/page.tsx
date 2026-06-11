@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { signOut } from './actions'
 import { ClosetView } from '@/components/closet/ClosetView'
-import type { Profile, Prenda, PrendaConUrl } from '@/types'
+import type { Profile, Prenda, PrendaConUrl, Conjunto } from '@/types'
 
 function HangerIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -117,6 +117,14 @@ export default async function HomePage() {
         .toUpperCase()
     : '?'
 
+  const { data: conjuntosData } = await supabase
+    .from('conjuntos')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const conjuntos = (conjuntosData ?? []) as Conjunto[]
+
   const preferencia = profile.preferencia_prendas ?? 'ambas'
   const tieneRopa = prendasConUrls.length > 0
 
@@ -172,6 +180,7 @@ export default async function HomePage() {
           /* ── Closet view with items ── */
           <ClosetView
             prendas={prendasConUrls}
+            conjuntos={conjuntos}
             preferencia={preferencia}
             nombreUsuario={profile.nombre}
             ciudad={profile.ciudad}

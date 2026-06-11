@@ -2,16 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { obtenerClima } from '@/lib/clima'
-import { filtrarCandidatas } from '@/lib/recomendador'
-import {
-  OCASION_LABELS,
-  OCASION_EMOJI,
-  NIVEL_CLIMA_LABELS,
-  NIVEL_CLIMA_EMOJI,
-} from '@/lib/recomendador'
+import { filtrarCandidatas, OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
 import type { PrendaConUrl, Outfit } from '@/types'
-import { saveGeoLocation } from '@/app/closet/actions'
+import { saveGeoLocation, saveConjunto, saveFeedback } from '@/app/closet/actions'
+import { OutfitCollage } from './OutfitCollage'
 
 type Step = 'ocasion' | 'clima' | 'cargando' | 'resultado' | 'error'
 
@@ -26,16 +21,6 @@ const LOADER_MSGS = [
   'Casi listo...',
 ]
 
-// Category ordering for collage
-const CAT_ORDER: Record<string, number> = {
-  cuerpo_completo: 0,
-  superior: 1,
-  inferior: 2,
-  abrigo: 3,
-  calzado: 4,
-  accesorio: 5,
-}
-
 interface Props {
   prendas: PrendaConUrl[]
   ciudad: string | null
@@ -46,73 +31,57 @@ interface Props {
 
 interface OutfitConPrendas extends Outfit {
   prendas: PrendaConUrl[]
+  liked?: boolean
 }
 
-function OutfitCollage({ prendas }: { prendas: PrendaConUrl[] }) {
-  const sorted = [...prendas].sort((a, b) => (CAT_ORDER[a.categoria] ?? 9) - (CAT_ORDER[b.categoria] ?? 9))
-
-  const main = sorted.filter((p) =>
-    ['superior', 'cuerpo_completo', 'inferior'].includes(p.categoria),
-  )
-  const extras = sorted.filter((p) =>
-    ['calzado', 'abrigo', 'accesorio'].includes(p.categoria),
-  )
-
-  return (
-    <div className="flex gap-1.5 w-full rounded-xl overflow-hidden bg-muted" style={{ aspectRatio: '4/3' }}>
-      {/* Main column */}
-      <div className="flex flex-col gap-1.5 flex-[3] min-w-0">
-        {main.map((p) => (
-          <div key={p.id} className="relative flex-1 overflow-hidden rounded-lg bg-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={p.signedUrl}
-              alt={p.tipo}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          </div>
-        ))}
-        {main.length === 0 && <div className="flex-1 bg-muted rounded-lg" />}
+function ClimaInfo({ loading, detectado }: Readonly<{ loading: boolean; detectado: { nivel: NivelClima; temp: number } | null }>) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span>Detectando clima...</span>
       </div>
-
-      {/* Side column */}
-      {extras.length > 0 && (
-        <div className="flex flex-col gap-1.5 flex-[2] min-w-0">
-          {extras.map((p) => (
-            <div key={p.id} className="relative flex-1 overflow-hidden rounded-lg bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p.signedUrl}
-                alt={p.tipo}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+    )
+  }
+  if (detectado) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>📍</span>
+        <span>
+          Temperatura máxima del día: <strong>{Math.round(detectado.temp)}°C</strong>
+          {' — '}sugerencia preseleccionada
+        </span>
+      </div>
+    )
+  }
+  return null
 }
 
 function OutfitCard({
   outfit,
-  index,
+  ocasion,
+  nivelClima,
   onLike,
   onRefresh,
+  onRemovePrenda,
   refreshing,
-}: {
+}: Readonly<{
   outfit: OutfitConPrendas
-  index: number
+  ocasion: Ocasion
+  nivelClima: NivelClima
   onLike: () => void
   onRefresh: () => void
+  onRemovePrenda: (prendaId: string) => void
   refreshing: boolean
-}) {
+}>) {
+  const likeClass = outfit.liked
+    ? 'border-primary/40 bg-primary/8 text-primary'
+    : 'border-border bg-background text-foreground hover:bg-accent/50'
+
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
       <div className="p-3">
-        <OutfitCollage prendas={outfit.prendas} />
+        <OutfitCollage prendas={outfit.prendas} onRemovePrenda={onRemovePrenda} />
       </div>
 
       <div className="px-4 pb-4">
@@ -120,28 +89,32 @@ function OutfitCard({
           {outfit.justificacion}
         </p>
 
-        {/* Prenda labels */}
         <div className="flex flex-wrap gap-1 mb-3">
           {outfit.prendas.map((p) => (
             <span
               key={p.id}
               className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full capitalize"
             >
-              {p.tipo.replace(/_/g, ' ')}
+              {p.tipo.replaceAll('_', ' ')}
             </span>
           ))}
         </div>
 
-        {/* Actions */}
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-muted-foreground">
+            {OCASION_EMOJI[ocasion]} {OCASION_LABELS[ocasion]} · {NIVEL_CLIMA_EMOJI[nivelClima]} {NIVEL_CLIMA_LABELS[nivelClima]}
+          </span>
+        </div>
+
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onLike}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border bg-background text-sm font-medium text-foreground hover:bg-accent/50 transition-colors active:scale-95"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all active:scale-95 ${likeClass}`}
             aria-label="Me encanta este conjunto"
           >
-            <span aria-hidden="true">❤️</span>
-            <span>Me encanta</span>
+            <span aria-hidden="true">{outfit.liked ? '❤️' : '🤍'}</span>
+            <span>{outfit.liked ? 'Guardado' : 'Me encanta'}</span>
           </button>
           <button
             type="button"
@@ -161,7 +134,7 @@ function OutfitCard({
   )
 }
 
-export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClose }: Props) {
+export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClose }: Readonly<Props>) {
   const [step, setStep] = useState<Step>('ocasion')
   const [ocasion, setOcasion] = useState<Ocasion | null>(null)
   const [nivelClima, setNivelClima] = useState<NivelClima | null>(null)
@@ -175,7 +148,6 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
 
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
 
-  // Rotate loader messages
   useEffect(() => {
     if (step !== 'cargando') return
     let i = 0
@@ -186,7 +158,6 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     return () => clearInterval(iv)
   }, [step])
 
-  // Start clima detection when entering clima step
   useEffect(() => {
     if (step !== 'clima') return
     setClimaLoading(true)
@@ -194,9 +165,8 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
       .then((result) => {
         setClimaDetectado({ nivel: result.nivelClima, temp: result.tempMax })
         setNivelClima((prev) => prev ?? result.nivelClima)
-        // Save lat/lon to profile if obtained from geolocation
         if (profileLat == null && profileLon == null) {
-          void saveGeoLocation(result.lat, result.lon)
+          saveGeoLocation(result.lat, result.lon).catch(() => null)
         }
       })
       .catch(() => {
@@ -210,12 +180,16 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     (raw: Outfit[]): OutfitConPrendas[] =>
       raw.map((o) => ({
         ...o,
-        prendas: o.prenda_ids.map((id) => prendasById.get(id)).filter(Boolean) as PrendaConUrl[],
+        prendas: o.prenda_ids.map((id) => prendasById.get(id)).filter((p): p is PrendaConUrl => p != null),
       })),
-    // prendasById is rebuilt from prendas on each render; use prendas as dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [prendas],
   )
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
 
   async function recomendar(avoid?: string[][]) {
     if (!ocasion || !nivelClima) return
@@ -231,13 +205,9 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
 
     const body = {
       prendas: candidatas.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
-        id,
-        tipo,
-        categoria,
-        color_principal,
+        id, tipo, categoria, color_principal,
         color_secundario: color_secundario ?? null,
-        estilo,
-        estampado,
+        estilo, estampado,
       })),
       ocasion,
       clima: nivelClima,
@@ -266,20 +236,25 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     }
   }
 
-  async function refreshOutfit(idx: number) {
+  async function refreshOutfit(idx: number, excludePrendaIds?: string[]) {
     if (!ocasion || !nivelClima) return
     setRefreshingIdx(idx)
 
-    const avoidIds = outfits[idx]?.prenda_ids ?? []
+    const currentOutfit = outfits[idx]
+    const avoidIds = currentOutfit?.prenda_ids ?? []
+
+    if (excludePrendaIds?.length) {
+      saveFeedback({ prenda_ids: excludePrendaIds, ocasion, clima: nivelClima, accion: 'descartado' }).catch(() => null)
+    }
+    saveFeedback({ prenda_ids: avoidIds, ocasion, clima: nivelClima, accion: 'regenerado' }).catch(() => null)
+
+    const prendasParaEnviar = prendas.filter((p) => !excludePrendaIds?.includes(p.id))
+
     const body = {
-      prendas: prendas.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
-        id,
-        tipo,
-        categoria,
-        color_principal,
+      prendas: prendasParaEnviar.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
+        id, tipo, categoria, color_principal,
         color_secundario: color_secundario ?? null,
-        estilo,
-        estampado,
+        estilo, estampado,
       })),
       ocasion,
       clima: nivelClima,
@@ -302,21 +277,35 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     setRefreshingIdx(null)
   }
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+  async function handleLike(idx: number) {
+    if (!ocasion || !nivelClima) return
+    const outfit = outfits[idx]
+    if (!outfit || outfit.liked) return
+
+    const result = await saveConjunto({
+      prenda_ids: outfit.prenda_ids,
+      ocasion,
+      clima: nivelClima,
+      justificacion: outfit.justificacion,
+    })
+
+    if (result.error) {
+      showToast('Error al guardar. Intenta de nuevo.')
+      return
+    }
+
+    setOutfits((prev) => prev.map((o, i) => (i === idx ? { ...o, liked: true } : o)))
+    showToast('¡Guardado en Mis conjuntos! ❤️')
   }
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Sheet */}
       <div
         className="fixed inset-x-0 bottom-0 z-50 max-w-lg mx-auto bg-background rounded-t-3xl shadow-xl flex flex-col"
         style={{ maxHeight: '92dvh' }}
@@ -324,17 +313,12 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
         aria-modal="true"
         aria-label="¿Qué me pongo hoy?"
       >
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
 
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pb-4 shrink-0">
-          <h2
-            className="text-xl font-light"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
+          <h2 className="text-xl font-light" style={{ fontFamily: 'var(--font-display)' }}>
             {step === 'resultado' ? 'Tu look de hoy ✦' : '¿Qué me pongo hoy?'}
           </h2>
           <button
@@ -347,10 +331,8 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
           </button>
         </div>
 
-        {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto px-5 pb-8">
 
-          {/* ── STEP: OCASION ── */}
           {step === 'ocasion' && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground mb-4">
@@ -361,10 +343,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
                   <button
                     key={oc}
                     type="button"
-                    onClick={() => {
-                      setOcasion(oc)
-                      setStep('clima')
-                    }}
+                    onClick={() => { setOcasion(oc); setStep('clima') }}
                     className="flex items-center gap-4 px-5 py-4 rounded-2xl border-2 border-border bg-card hover:border-primary/60 hover:bg-accent/30 transition-all active:scale-[0.98] text-left"
                   >
                     <span className="text-2xl">{OCASION_EMOJI[oc]}</span>
@@ -375,35 +354,20 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
             </div>
           )}
 
-          {/* ── STEP: CLIMA ── */}
           {step === 'clima' && ocasion && (
             <div className="space-y-5">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">
-                  Ocasión elegida: <span className="font-medium text-foreground">{OCASION_EMOJI[ocasion]} {OCASION_LABELS[ocasion]}</span>
+                  Ocasión elegida:{' '}
+                  <span className="font-medium text-foreground">
+                    {OCASION_EMOJI[ocasion]} {OCASION_LABELS[ocasion]}
+                  </span>
                 </p>
                 <p className="text-sm text-muted-foreground">¿Cómo está el clima hoy?</p>
               </div>
 
-              {/* Auto-detected badge */}
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {climaLoading ? (
-                  <>
-                    <span className="inline-block w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <span>Detectando clima...</span>
-                  </>
-                ) : climaDetectado ? (
-                  <>
-                    <span>📍</span>
-                    <span>
-                      Temperatura máxima del día: <strong>{Math.round(climaDetectado.temp)}°C</strong>
-                      {' — '}sugerencia preseleccionada
-                    </span>
-                  </>
-                ) : null}
-              </div>
+              <ClimaInfo loading={climaLoading} detectado={climaDetectado} />
 
-              {/* Clima chips */}
               <div className="grid grid-cols-3 gap-2.5">
                 {NIVELES_CLIMA.map((nivel) => {
                   const active = nivelClima === nivel
@@ -426,11 +390,10 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
                 })}
               </div>
 
-              {/* CTA */}
               <button
                 type="button"
                 disabled={!nivelClima}
-                onClick={() => void recomendar()}
+                onClick={() => recomendar().catch(() => null)}
                 className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✨ Recomiéndame un look
@@ -446,20 +409,15 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
             </div>
           )}
 
-          {/* ── STEP: CARGANDO ── */}
           {step === 'cargando' && (
             <div className="flex flex-col items-center justify-center py-16 gap-6">
               <div className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-              <p
-                className="text-lg font-light text-center"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
+              <p className="text-lg font-light text-center" style={{ fontFamily: 'var(--font-display)' }}>
                 {loaderMsg}
               </p>
             </div>
           )}
 
-          {/* ── STEP: ERROR ── */}
           {step === 'error' && (
             <div className="flex flex-col items-center text-center py-12 gap-4">
               <span className="text-4xl">🔍</span>
@@ -467,7 +425,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
               <div className="flex gap-2 flex-col w-full mt-2">
                 <button
                   type="button"
-                  onClick={() => void recomendar()}
+                  onClick={() => recomendar().catch(() => null)}
                   className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
                 >
                   Intentar de nuevo
@@ -483,23 +441,27 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
             </div>
           )}
 
-          {/* ── STEP: RESULTADO ── */}
-          {step === 'resultado' && (
+          {step === 'resultado' && ocasion && nivelClima && (
             <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Toca ✕ en una prenda para sustituirla · 🔄 para otro conjunto completo.
+              </p>
               {outfits.map((outfit, i) => (
                 <OutfitCard
                   key={outfit.prenda_ids.join('-')}
                   outfit={outfit}
-                  index={i}
-                  onLike={() => showToast('¡Guardado próximamente! 💕')}
-                  onRefresh={() => void refreshOutfit(i)}
+                  ocasion={ocasion}
+                  nivelClima={nivelClima}
+                  onLike={() => handleLike(i).catch(() => null)}
+                  onRefresh={() => refreshOutfit(i).catch(() => null)}
+                  onRemovePrenda={(prendaId) => refreshOutfit(i, [prendaId]).catch(() => null)}
                   refreshing={refreshingIdx === i}
                 />
               ))}
 
               <button
                 type="button"
-                onClick={() => void recomendar(outfits.map((o) => o.prenda_ids))}
+                onClick={() => recomendar(outfits.map((o) => o.prenda_ids)).catch(() => null)}
                 className="w-full py-4 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-colors active:scale-[0.98]"
               >
                 🔀 Generar de nuevo
@@ -517,9 +479,8 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
-        <div className="fixed bottom-24 inset-x-4 max-w-sm mx-auto z-[60] bg-foreground text-background text-sm px-4 py-3 rounded-xl shadow-lg text-center animate-fade-up">
+        <div className="fixed bottom-24 inset-x-4 max-w-sm mx-auto z-60 bg-foreground text-background text-sm px-4 py-3 rounded-xl shadow-lg text-center animate-fade-up">
           {toast}
         </div>
       )}

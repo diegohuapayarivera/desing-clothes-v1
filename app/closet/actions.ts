@@ -5,6 +5,77 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
 
+// ── Conjuntos ──────────────────────────────────────────────────────────────
+
+export async function saveConjunto(data: {
+  prenda_ids: string[]
+  ocasion: string
+  clima: string | null
+  justificacion: string | null
+}): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+  const { error } = await supabase.from('conjuntos').insert({
+    user_id: user.id,
+    prenda_ids: data.prenda_ids,
+    ocasion: data.ocasion,
+    clima: data.clima,
+    justificacion: data.justificacion,
+    origen: 'ia',
+  })
+  if (error) return { error: 'Error al guardar el conjunto' }
+  return {}
+}
+
+export async function renameConjunto(id: string, nombre: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+  const { error } = await supabase
+    .from('conjuntos')
+    .update({ nombre: nombre.trim() || null })
+    .eq('id', id)
+    .eq('user_id', user.id)
+  if (error) return { error: 'Error al renombrar' }
+  return {}
+}
+
+export async function deleteConjunto(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+  const { error } = await supabase
+    .from('conjuntos')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+  if (error) return { error: 'Error al eliminar' }
+  return {}
+}
+
+// ── Feedback ───────────────────────────────────────────────────────────────
+
+export async function saveFeedback(data: {
+  prenda_ids: string[]
+  ocasion: string | null
+  clima: string | null
+  accion: 'descartado' | 'regenerado'
+}): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase.from('feedback_outfits').insert({
+    user_id: user.id,
+    prenda_ids: data.prenda_ids,
+    ocasion: data.ocasion,
+    clima: data.clima,
+    accion: data.accion,
+  })
+}
+
+// ── Geo ────────────────────────────────────────────────────────────────────
+
 export async function saveGeoLocation(lat: number, lon: number): Promise<void> {
   const supabase = await createClient()
   const {
@@ -62,6 +133,18 @@ export async function savePrenda(formData: FormData): Promise<{ error?: string }
   return {}
 }
 
+export async function countConjuntosForPrenda(id: string): Promise<number> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 0
+  const { count } = await supabase
+    .from('conjuntos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .contains('prenda_ids', [id])
+  return count ?? 0
+}
+
 export async function deletePrenda(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const {
@@ -78,7 +161,14 @@ export async function deletePrenda(id: string): Promise<{ error?: string }> {
 
   if (fetchError || !prenda) return { error: 'Prenda no encontrada' }
 
-  // Delete DB record (cascade handles nothing here; RLS checks ownership)
+  // Delete conjuntos that contain this prenda
+  await supabase
+    .from('conjuntos')
+    .delete()
+    .eq('user_id', user.id)
+    .contains('prenda_ids', [id])
+
+  // Delete DB record (RLS checks ownership)
   const { error: dbError } = await supabase.from('prendas').delete().eq('id', id)
   if (dbError) return { error: 'Error al eliminar' }
 
