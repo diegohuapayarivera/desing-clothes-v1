@@ -3,25 +3,28 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
-import { OCASION_LABELS } from '@/lib/recomendador'
+import { OCASION_LABELS, filtrarCandidatas } from '@/lib/recomendador'
+import type { Prenda } from '@/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const PrendaIASchema = z.object({
-  id: z.string(),
-  tipo: z.string(),
-  categoria: z.string(),
-  color_principal: z.string(),
-  color_secundario: z.string().nullable().optional(),
-  estilo: z.string(),
-  estampado: z.boolean(),
-})
+// Internal type only — not part of the public request contract
+interface PrendaIA {
+  id: string
+  tipo: string
+  categoria: string
+  color_principal: string
+  color_secundario?: string | null
+  estilo: string
+  estampado: boolean
+}
 
+// Client only sends intent — prendas are fetched server-side
 const RequestSchema = z.object({
-  prendas: z.array(PrendaIASchema),
   ocasion: z.enum(['trabajo', 'casual', 'noche', 'formal', 'deporte']),
   clima: z.enum(['frio', 'templado', 'calor']),
   avoid: z.array(z.array(z.string())).optional(),
+  excludePrendaIds: z.array(z.string()).optional(),
 })
 
 const OutfitSchema = z.object({
@@ -32,8 +35,6 @@ const OutfitSchema = z.object({
 const ResponseSchema = z.object({
   outfits: z.array(OutfitSchema),
 })
-
-type PrendaIA = z.infer<typeof PrendaIASchema>
 
 interface PersonalizacionCtx {
   favoritos: string[]
@@ -223,7 +224,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const { prendas, ocasion, clima, avoid } = body
+  const { ocasion, clima, avoid, excludePrendaIds } = body
+
+  // Fetch prendas from DB — client is never trusted for this
+  const { data: prendaRows } = await supabase
+    .from('prendas')
+    .select('*')
+    .eq('user_id', user.id)
+  const allPrendas = (prendaRows ?? []) as Prenda[]
+
+  // Apply per-prenda exclusion (used by ✕ refresh)
+  const prendasParaFiltrar = excludePrendaIds?.length
+    ? allPrendas.filter((p) => !excludePrendaIds.includes(p.id))
+    : allPrendas
+
+  // Run candidate filter server-side
+  const { candidatas, error: filtroError } = filtrarCandidatas(
+    prendasParaFiltrar.map((p) => ({ ...p, signedUrl: '' })),
+    ocasion,
+    clima,
+  )
+  if (filtroError) {
+    return NextResponse.json({ error: filtroError }, { status: 422 })
+  }
+
+  // Map to PrendaIA for prompt building
+  const prendas: PrendaIA[] = candidatas.map(
+    ({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
+      id,
+      tipo,
+      categoria,
+      color_principal,
+      color_secundario: color_secundario ?? null,
+      estilo,
+      estampado,
+    }),
+  )
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
 
   const personalizacion = await fetchPersonalizacion(supabase, ocasion, prendasById)

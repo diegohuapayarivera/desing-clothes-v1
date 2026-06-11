@@ -110,8 +110,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Error al subir la foto' }, { status: 500 })
   }
 
+  // Response type allows null for fields the AI may fail to classify
+  type ApiTags = {
+    categoria: Tags['categoria'] | null
+    tipo: string | null
+    color_principal: Tags['color_principal'] | null
+    color_secundario: Tags['color_secundario'] | null
+    estilo: Tags['estilo'] | null
+    estampado: boolean
+    temporada: Tags['temporada']
+  }
+
   // Call Claude Haiku for auto-tagging
-  let tags: Tags | null = null
+  let tags: ApiTags | null = null
 
   try {
     const base64 = Buffer.from(imageBytes).toString('base64')
@@ -156,39 +167,34 @@ Responde con este JSON exacto:
       const result = TagsSchema.safeParse(normalized)
 
       if (result.success) {
-        // Ensure tipo is in taxonomy even after Zod passes
-        if (!TODOS_LOS_TIPOS_VALORES.includes(result.data.tipo)) {
-          tags = { ...result.data, tipo: '' } // blank → user picks manually
-        } else {
-          tags = result.data
+        const tipo = TODOS_LOS_TIPOS_VALORES.includes(result.data.tipo) ? result.data.tipo : null
+        tags = {
+          ...result.data,
+          tipo,
+          color_secundario: result.data.color_secundario ?? null,
         }
       } else {
-        // Partial recovery: use normalized value where valid, null elsewhere
+        // Partial recovery: null for fields the AI got wrong — no fake pre-selections
         const issues = new Set(result.error.issues.map((i) => String(i.path[0])))
+        const cat = normalized.categoria as Tags['categoria']
+        const cp = normalized.color_principal as Tags['color_principal']
+        const est = normalized.estilo as Tags['estilo']
+        const tmp = normalized.temporada as Tags['temporada']
         tags = {
-          categoria: issues.has('categoria') ? 'superior' : (normalized.categoria as Tags['categoria']),
+          categoria: issues.has('categoria') ? null : cat,
           tipo: TODOS_LOS_TIPOS_VALORES.includes(normalized.tipo as string)
             ? (normalized.tipo as string)
-            : '',
-          color_principal: issues.has('color_principal')
-            ? 'negro'
-            : (normalized.color_principal as Tags['color_principal']),
+            : null,
+          color_principal: issues.has('color_principal') ? null : cp,
           color_secundario: null,
-          estilo: issues.has('estilo') ? 'casual' : (normalized.estilo as Tags['estilo']),
+          estilo: issues.has('estilo') ? null : est,
           estampado: typeof normalized.estampado === 'boolean' ? normalized.estampado : false,
-          temporada: issues.has('temporada')
-            ? 'todo_el_año'
-            : (normalized.temporada as Tags['temporada']),
+          temporada: issues.has('temporada') ? 'todo_el_año' : tmp,
         }
       }
     }
   } catch {
     // AI failure is non-blocking — form shows empty for manual tagging
-  }
-
-  // Return empty string tipo as null so the form shows no pre-selection
-  if (tags && tags.tipo === '') {
-    tags = { ...tags, tipo: null as unknown as string }
   }
 
   return NextResponse.json({ foto_path: fotoPath, tags })

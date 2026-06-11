@@ -25,6 +25,7 @@ export async function saveConjunto(data: {
     origen: 'ia',
   })
   if (error) return { error: 'Error al guardar el conjunto' }
+  revalidatePath('/')
   return {}
 }
 
@@ -72,6 +73,17 @@ export async function saveFeedback(data: {
     clima: data.clima,
     accion: data.accion,
   })
+}
+
+// ── Storage cleanup ────────────────────────────────────────────────────────
+
+export async function deleteFotoHuerfana(foto_path: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  // Only allow deleting from the user's own folder
+  if (!foto_path.startsWith(`${user.id}/`)) return
+  await supabase.storage.from('prendas-fotos').remove([foto_path])
 }
 
 // ── Geo ────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useTransition, useEffect } from 'react'
 import imageCompression from 'browser-image-compression'
-import { savePrenda } from '@/app/closet/actions'
+import { savePrenda, deleteFotoHuerfana } from '@/app/closet/actions'
 import {
   CATEGORIAS,
   COLORES,
@@ -287,6 +287,14 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     })
   }
 
+  function handleClose() {
+    // If a photo was uploaded but the prenda was never saved, delete the orphan file
+    if (form.foto_path && step !== 'success') {
+      deleteFotoHuerfana(form.foto_path).catch(() => null)
+    }
+    onClose()
+  }
+
   function handleAgregarOtra() {
     setStep('capture')
     setPreview(null)
@@ -312,7 +320,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     <div className="fixed inset-0 z-50 flex flex-col justify-end p-3" role="dialog" aria-modal="true">
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
         aria-hidden="true"
       />
 
@@ -329,7 +337,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
           </h2>
           <button
             type="button"
-            onClick={step === 'success' ? onSaved : onClose}
+            onClick={step === 'success' ? onSaved : handleClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
             aria-label="Cerrar"
           >

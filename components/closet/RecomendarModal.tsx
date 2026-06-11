@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { obtenerClima } from '@/lib/clima'
-import { filtrarCandidatas, OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
+import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
 import type { PrendaConUrl, Outfit } from '@/types'
 import { saveGeoLocation, saveConjunto, saveFeedback } from '@/app/closet/actions'
@@ -135,11 +136,13 @@ function OutfitCard({
 }
 
 export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClose }: Readonly<Props>) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>('ocasion')
   const [ocasion, setOcasion] = useState<Ocasion | null>(null)
   const [nivelClima, setNivelClima] = useState<NivelClima | null>(null)
   const [climaDetectado, setClimaDetectado] = useState<{ nivel: NivelClima; temp: number } | null>(null)
-  const [climaLoading, setClimaLoading] = useState(false)
+  // Derived: loading while in the clima step and no result yet
+  const climaLoading = step === 'clima' && climaDetectado === null
   const [loaderMsg, setLoaderMsg] = useState(LOADER_MSGS[0])
   const [outfits, setOutfits] = useState<OutfitConPrendas[]>([])
   const [errorMsg, setErrorMsg] = useState('')
@@ -159,8 +162,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
   }, [step])
 
   useEffect(() => {
-    if (step !== 'clima') return
-    setClimaLoading(true)
+    if (step !== 'clima' || climaDetectado !== null) return
     obtenerClima(ciudad, profileLat, profileLon)
       .then((result) => {
         setClimaDetectado({ nivel: result.nivelClima, temp: result.tempMax })
@@ -173,8 +175,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
         setClimaDetectado({ nivel: 'templado', temp: 20 })
         setNivelClima((prev) => prev ?? 'templado')
       })
-      .finally(() => setClimaLoading(false))
-  }, [step, ciudad, profileLat, profileLon])
+  }, [step, climaDetectado, ciudad, profileLat, profileLon])
 
   const buildOutfitCon = useCallback(
     (raw: Outfit[]): OutfitConPrendas[] =>
@@ -196,29 +197,11 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     setStep('cargando')
     setLoaderMsg(LOADER_MSGS[0])
 
-    const { candidatas, error } = filtrarCandidatas(prendas, ocasion, nivelClima)
-    if (error) {
-      setErrorMsg(error)
-      setStep('error')
-      return
-    }
-
-    const body = {
-      prendas: candidatas.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
-        id, tipo, categoria, color_principal,
-        color_secundario: color_secundario ?? null,
-        estilo, estampado,
-      })),
-      ocasion,
-      clima: nivelClima,
-      avoid,
-    }
-
     try {
       const res = await fetch('/api/recomendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ocasion, clima: nivelClima, avoid }),
       })
       const data = (await res.json()) as { outfits?: Outfit[]; error?: string }
 
@@ -248,24 +231,16 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     }
     saveFeedback({ prenda_ids: avoidIds, ocasion, clima: nivelClima, accion: 'regenerado' }).catch(() => null)
 
-    const prendasParaEnviar = prendas.filter((p) => !excludePrendaIds?.includes(p.id))
-
-    const body = {
-      prendas: prendasParaEnviar.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
-        id, tipo, categoria, color_principal,
-        color_secundario: color_secundario ?? null,
-        estilo, estampado,
-      })),
-      ocasion,
-      clima: nivelClima,
-      avoid: [avoidIds],
-    }
-
     try {
       const res = await fetch('/api/recomendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ocasion,
+          clima: nivelClima,
+          avoid: [avoidIds],
+          excludePrendaIds: excludePrendaIds ?? [],
+        }),
       })
       const data = (await res.json()) as { outfits?: Outfit[]; error?: string }
       if (res.ok && data.outfits && data.outfits.length > 0) {
@@ -296,6 +271,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
 
     setOutfits((prev) => prev.map((o, i) => (i === idx ? { ...o, liked: true } : o)))
     showToast('¡Guardado en Mis conjuntos! ❤️')
+    router.refresh()
   }
 
   return (

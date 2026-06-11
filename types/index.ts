@@ -57,11 +57,11 @@ export interface FeedbackOutfit {
 }
 
 export interface TagsIA {
-  categoria: Categoria
-  tipo: string
-  color_principal: Color
+  categoria: Categoria | null
+  tipo: string | null
+  color_principal: Color | null
   color_secundario: Color | null
-  estilo: Estilo
+  estilo: Estilo | null
   estampado: boolean
   temporada: Temporada
 }
