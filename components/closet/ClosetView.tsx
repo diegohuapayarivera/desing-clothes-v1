@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PrendaDetalle } from './PrendaDetalle'
 import { AgregarPrendaModal } from './AgregarPrendaModal'
+import { RecomendarModal } from './RecomendarModal'
 import { CATEGORIAS, COLORES, CATEGORIA_LABELS, CATEGORIA_EMOJIS, colorBgStyle } from '@/lib/taxonomia'
 import type { PrendaConUrl, PreferenciaPrendas } from '@/types'
 import type { Categoria, Color } from '@/lib/taxonomia'
@@ -11,14 +12,25 @@ interface Props {
   prendas: PrendaConUrl[]
   preferencia: PreferenciaPrendas
   nombreUsuario: string | null
+  ciudad: string | null
+  profileLat: number | null
+  profileLon: number | null
 }
 
-export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario }: Props) {
+export function ClosetView({
+  prendas: initialPrendas,
+  preferencia,
+  nombreUsuario,
+  ciudad,
+  profileLat,
+  profileLon,
+}: Readonly<Props>) {
   const [prendas, setPrendas] = useState(initialPrendas)
   const [filtroCats, setFiltroCats] = useState<Set<Categoria>>(new Set())
   const [filtroColores, setFiltroColores] = useState<Set<Color>>(new Set())
   const [detalle, setDetalle] = useState<PrendaConUrl | null>(null)
   const [showAgregar, setShowAgregar] = useState(false)
+  const [showRecomendar, setShowRecomendar] = useState(false)
 
   function toggleCat(cat: Categoria) {
     setFiltroCats((prev) => {
@@ -50,6 +62,17 @@ export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario
 
   return (
     <>
+      {/* ¿Qué me pongo hoy? CTA */}
+      <button
+        type="button"
+        onClick={() => setShowRecomendar(true)}
+        className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] mb-3 shadow-sm"
+        aria-label="Recibir recomendación de outfit"
+      >
+        <span aria-hidden="true">✨</span>
+        {' ¿Qué me pongo hoy?'}
+      </button>
+
       {/* Agregar button */}
       <button
         type="button"
@@ -176,6 +199,17 @@ export function ClosetView({ prendas: initialPrendas, preferencia, nombreUsuario
             setShowAgregar(false)
             handleRefresh()
           }}
+        />
+      )}
+
+      {/* Recomendar modal */}
+      {showRecomendar && (
+        <RecomendarModal
+          prendas={prendas}
+          ciudad={ciudad}
+          profileLat={profileLat}
+          profileLon={profileLon}
+          onClose={() => setShowRecomendar(false)}
         />
       )}
     </>

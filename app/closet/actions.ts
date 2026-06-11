@@ -5,6 +5,15 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
 
+export async function saveGeoLocation(lat: number, lon: number): Promise<void> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase.from('profiles').update({ lat, lon }).eq('id', user.id)
+}
+
 const TIPOS_VALIDOS = TODOS_LOS_TIPOS_VALORES as [string, ...string[]]
 
 const PrendaSchema = z.object({

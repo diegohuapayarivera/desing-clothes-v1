@@ -174,6 +174,9 @@ export default async function HomePage() {
             prendas={prendasConUrls}
             preferencia={preferencia}
             nombreUsuario={profile.nombre}
+            ciudad={profile.ciudad}
+            profileLat={profile.lat}
+            profileLon={profile.lon}
           />
         ) : (
           /* ── Empty state ── */

@@ -7,8 +7,15 @@ export interface Profile {
   nombre: string | null
   preferencia_prendas: PreferenciaPrendas | null
   ciudad: string | null
+  lat: number | null
+  lon: number | null
   onboarding_completado: boolean
   created_at: string
+}
+
+export interface Outfit {
+  prenda_ids: string[]
+  justificacion: string
 }
 
 export interface Prenda {
