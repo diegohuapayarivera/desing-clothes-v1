@@ -52,7 +52,7 @@ export function MainLayout({ initials, children }: Readonly<Props>) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border/60">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-lg lg:max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
               <HangerIcon className="w-4 h-4 text-primary" />
@@ -81,8 +81,9 @@ export function MainLayout({ initials, children }: Readonly<Props>) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
-        <div className="flex gap-1 bg-muted/50 rounded-xl p-1 mb-5">
+      <main className="flex-1 max-w-lg lg:max-w-6xl mx-auto w-full px-4 py-8">
+        {/* Mobile tab bar */}
+        <div className="flex gap-1 bg-muted/50 rounded-xl p-1 mb-5 lg:hidden">
           {TABS.map(({ href, label, Icon }) => {
             const active = pathname === href
             return (
@@ -103,7 +104,31 @@ export function MainLayout({ initials, children }: Readonly<Props>) {
           })}
         </div>
 
-        {children}
+        <div className="lg:grid lg:grid-cols-[14rem_1fr] lg:gap-10 lg:items-start">
+          {/* Desktop sidebar nav */}
+          <aside className="hidden lg:flex lg:flex-col lg:gap-1 lg:sticky lg:top-20">
+            {TABS.map(({ href, label, Icon }) => {
+              const active = pathname === href
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={[
+                    'flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                  ].join(' ')}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {label}
+                </Link>
+              )
+            })}
+          </aside>
+
+          <div>{children}</div>
+        </div>
       </main>
     </div>
   )

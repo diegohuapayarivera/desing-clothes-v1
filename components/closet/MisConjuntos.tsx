@@ -73,7 +73,7 @@ function ConjuntoDetalle({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3 md:justify-center md:p-6" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div className="relative bg-background rounded-3xl overflow-hidden w-full max-w-lg mx-auto max-h-[90dvh] flex flex-col shadow-2xl animate-fade-up">
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -288,7 +288,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {conjuntos.map((c) => {
           const cprendas = getPrendasDeConjunto(c)
           const label = c.nombre ?? `Conjunto ${OCASION_LABELS[c.ocasion as Ocasion] ?? c.ocasion}`

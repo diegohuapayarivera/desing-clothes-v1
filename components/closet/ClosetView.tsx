@@ -98,29 +98,6 @@ export function ClosetView({
 
   return (
     <>
-      {!modoSeleccion && (
-        <button
-          type="button"
-          onClick={() => setShowRecomendar(true)}
-          className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] mb-2 shadow-sm"
-          aria-label="Recibir recomendación de outfit"
-        >
-          <Sparkles className="w-4 h-4" aria-hidden="true" />
-          ¿Qué me pongo hoy?
-        </button>
-      )}
-
-      {!modoSeleccion && (
-        <button
-          type="button"
-          onClick={() => setModoSeleccion(true)}
-          className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98] mb-3"
-        >
-          <Layers className="w-4 h-4" aria-hidden="true" />
-          Combinar prendas
-        </button>
-      )}
-
       {modoSeleccion && (
         <div className="flex items-center justify-between mb-3 px-1">
           <p className="text-sm font-medium text-foreground">
@@ -138,20 +115,39 @@ export function ClosetView({
       )}
 
       {!modoSeleccion && (
-        <button
-          type="button"
-          onClick={() => setShowAgregar(true)}
-          className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95 mb-6"
-          aria-label="Agregar prenda"
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          Agregar prenda
-        </button>
+        <div className="flex flex-col md:flex-row gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setShowRecomendar(true)}
+            className="w-full md:flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm"
+            aria-label="Recibir recomendación de outfit"
+          >
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
+            ¿Qué me pongo hoy?
+          </button>
+          <button
+            type="button"
+            onClick={() => setModoSeleccion(true)}
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
+          >
+            <Layers className="w-4 h-4" aria-hidden="true" />
+            Combinar prendas
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAgregar(true)}
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95"
+            aria-label="Agregar prenda"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Agregar prenda
+          </button>
+        </div>
       )}
 
       {!modoSeleccion && (
         <div className="space-y-3 mb-5">
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto lg:overflow-x-visible pb-1 lg:pb-0 scrollbar-none lg:flex-wrap">
             {CATEGORIAS.map((cat) => {
               const active = filtroCats.has(cat)
               const Icon = CATEGORIA_ICONS[cat]
@@ -173,7 +169,7 @@ export function ClosetView({
               )
             })}
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto lg:overflow-x-visible pb-1 lg:pb-0 scrollbar-none lg:flex-wrap">
             {COLORES.map((color) => {
               const active = filtroColores.has(color)
               return (
@@ -240,7 +236,7 @@ export function ClosetView({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {prendas.map((p) => (
             <PrendaCard
               key={p.id}
@@ -315,7 +311,7 @@ export function ClosetView({
       )}
 
       {modoSeleccion && seleccionadas.size >= 1 && (
-        <div className="fixed bottom-0 inset-x-0 max-w-lg mx-auto z-30 px-4 pb-6 pt-3 bg-background/95 backdrop-blur-sm border-t border-border">
+        <div className="fixed bottom-0 inset-x-0 max-w-lg lg:max-w-6xl mx-auto z-30 px-4 pb-6 pt-3 bg-background/95 backdrop-blur-sm border-t border-border">
           <button
             type="button"
             onClick={confirmarCombinar}

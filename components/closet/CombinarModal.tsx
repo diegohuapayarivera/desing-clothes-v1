@@ -116,9 +116,14 @@ function MotivoSheet({
     <>
       <div className="fixed inset-0 z-55" onClick={() => onSelect(null)} aria-hidden="true" />
       <div
-        className="fixed inset-x-0 bottom-0 z-56 max-w-lg mx-auto bg-background rounded-t-2xl shadow-2xl px-5 pt-5 pb-8"
+        className="fixed inset-0 z-56 flex flex-col justify-end md:justify-center md:p-6"
+        onClick={() => onSelect(null)}
+      >
+      <div
+        className="bg-background rounded-t-2xl md:rounded-2xl w-full max-w-lg md:max-w-sm mx-auto shadow-2xl px-5 pt-5 pb-8"
         role="dialog"
         aria-label="¿Por qué no te convence?"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center mb-4">
           <div className="w-8 h-1 rounded-full bg-border" />
@@ -145,6 +150,7 @@ function MotivoSheet({
         >
           Saltar
         </button>
+      </div>
       </div>
     </>
   )
@@ -450,11 +456,16 @@ export function CombinarModal({
         aria-hidden="true"
       />
       <div
-        className="fixed inset-x-0 bottom-0 z-50 max-w-lg mx-auto bg-background rounded-t-3xl shadow-xl flex flex-col"
+        className="fixed inset-0 z-50 flex flex-col justify-end md:justify-center md:p-6"
+        onClick={onClose}
+      >
+      <div
+        className="bg-background rounded-t-3xl md:rounded-3xl w-full max-w-lg md:max-w-2xl mx-auto shadow-xl flex flex-col"
         style={{ maxHeight: '92dvh' }}
         role="dialog"
         aria-modal="true"
         aria-label="Combíname esta prenda"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />
@@ -605,6 +616,7 @@ export function CombinarModal({
               <p className="text-xs text-muted-foreground">
                 Toca una prenda para sustituirla · actualiza el conjunto completo con el botón de la derecha.
               </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {outfits.map((outfit, i) => (
                 <OutfitCard
                   key={outfit.uid}
@@ -621,6 +633,7 @@ export function CombinarModal({
                   }
                 />
               ))}
+              </div>
               <button
                 type="button"
                 onClick={() =>
@@ -646,6 +659,7 @@ export function CombinarModal({
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {toast && (

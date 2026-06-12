@@ -349,7 +349,7 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
                     if (outfit) setSelectedDia(fecha)
                     else if (!isFuture) setRegistrando(fecha)
                   }}
-                  className={`min-h-[3rem] rounded-lg flex flex-col items-center justify-start pt-1 gap-0.5 transition-colors cursor-pointer
+                  className={`min-h-[3rem] lg:min-h-[5rem] rounded-lg flex flex-col items-center justify-start pt-1 gap-0.5 transition-colors cursor-pointer
                     ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}
                     ${isFuture ? 'opacity-30 cursor-not-allowed' : 'hover:bg-muted'}
                     ${outfit ? 'bg-primary/5' : ''}
@@ -363,7 +363,7 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
                     <img
                       src={thumbUrl}
                       alt=""
-                      className="w-6 h-6 rounded-md object-cover"
+                      className="w-6 h-6 lg:w-10 lg:h-10 rounded-md object-cover"
                     />
                   )}
                   {outfit && !thumbUrl && (
@@ -479,9 +479,9 @@ function DiaDetalle({ fecha, outfit, prendasById, onClose, onDelete, onUpdateFec
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
+        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -615,9 +615,9 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl border border-border shadow-xl flex flex-col max-h-[85vh] animate-slide-up"
+        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl flex flex-col max-h-[85vh] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -738,9 +738,9 @@ function ConfirmReplaceSheet({ fecha, onConfirm, onCancel }: Readonly<ConfirmRep
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onCancel}>
       <div
-        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
+        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm text-foreground text-center">

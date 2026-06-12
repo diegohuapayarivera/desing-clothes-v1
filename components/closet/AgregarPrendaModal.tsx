@@ -367,7 +367,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end p-3 md:justify-center md:p-6" role="dialog" aria-modal="true">
       <div
         className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
         onClick={handleClose}
