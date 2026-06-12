@@ -26,7 +26,7 @@ export async function saveConjunto(data: {
     origen: 'ia',
   })
   if (error) return { error: 'Error al guardar el conjunto' }
-  revalidatePath('/')
+  revalidatePath('/conjuntos')
   return {}
 }
 
@@ -266,7 +266,7 @@ export async function registrarOutfitUsado(data: {
     )
 
   if (error) return { error: 'Error al registrar el outfit' }
-  revalidatePath('/')
+  revalidatePath('/calendario')
   return {}
 }
 
@@ -285,7 +285,7 @@ export async function updateOutfitUsado(
     .eq('user_id', user.id)
 
   if (error) return { error: 'Error al actualizar el outfit' }
-  revalidatePath('/')
+  revalidatePath('/calendario')
   return {}
 }
 
@@ -301,7 +301,7 @@ export async function deleteOutfitUsado(id: string): Promise<{ error?: string }>
     .eq('user_id', user.id)
 
   if (error) return { error: 'Error al eliminar el outfit' }
-  revalidatePath('/')
+  revalidatePath('/calendario')
   return {}
 }
 

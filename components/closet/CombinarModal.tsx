@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { X, Heart, RefreshCw, Sparkles, MapPin, Search } from 'lucide-react'
 import { obtenerClima } from '@/lib/clima'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -75,7 +75,7 @@ function FijaChips({ fijas }: Readonly<{ fijas: PrendaConUrl[] }>) {
           />
           <span className="text-xs font-medium capitalize">{p.tipo.replaceAll('_', ' ')}</span>
           <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
-            📌
+            fija
           </span>
         </div>
       ))}
@@ -98,7 +98,7 @@ function ClimaInfo({
   if (detectado) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>📍</span>
+        <MapPin className="w-3.5 h-3.5 shrink-0" />
         <span>
           Temperatura máxima del día: <strong>{Math.round(detectado.temp)}°C</strong>
           {' — '}sugerencia preseleccionada
@@ -213,7 +213,7 @@ function OutfitCard({
             disabled={busy}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all active:scale-95 disabled:opacity-50 ${likeClass}`}
           >
-            <span aria-hidden="true">{outfit.liked ? '❤️' : '🤍'}</span>
+            <Heart className={`w-4 h-4 ${outfit.liked ? 'fill-current' : ''}`} aria-hidden="true" />
             <span>{outfit.liked ? 'Guardado' : 'Me encanta'}</span>
           </button>
           <button
@@ -222,9 +222,7 @@ function OutfitCard({
             disabled={busy}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border bg-background text-sm font-medium text-foreground hover:bg-accent/50 transition-colors active:scale-95 disabled:opacity-50"
           >
-            <span aria-hidden="true" className={refreshing ? 'animate-spin inline-block' : ''}>
-              🔄
-            </span>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
             <span>{refreshing ? 'Buscando...' : 'Otra opción'}</span>
           </button>
         </div>
@@ -241,7 +239,6 @@ export function CombinarModal({
   profileLon,
   onClose,
 }: Readonly<Props>) {
-  const router = useRouter()
   const [step, setStep] = useState<Step>('ocasion')
   const [ocasion, setOcasion] = useState<Ocasion | null>(null)
   const [nivelClima, setNivelClima] = useState<NivelClima | null>(null)
@@ -439,8 +436,7 @@ export function CombinarModal({
       return
     }
     setOutfits((prev) => prev.map((o, i) => (i === idx ? { ...o, liked: true } : o)))
-    showToast('¡Guardado en Mis conjuntos! ❤️')
-    router.refresh()
+    showToast('¡Guardado en Mis conjuntos!')
   }
 
   const climaWarnings =
@@ -473,7 +469,7 @@ export function CombinarModal({
             className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-border transition-colors"
             aria-label="Cerrar"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -549,9 +545,10 @@ export function CombinarModal({
                 type="button"
                 disabled={!nivelClima}
                 onClick={() => generar().catch(() => null)}
-                className="w-full py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                ✨ Armar conjuntos
+                <Sparkles className="w-4 h-4" aria-hidden="true" />
+                Armar conjuntos
               </button>
               <button
                 type="button"
@@ -577,7 +574,7 @@ export function CombinarModal({
 
           {step === 'error' && (
             <div className="flex flex-col items-center text-center py-12 gap-4">
-              <span className="text-4xl">🔍</span>
+              <Search className="w-10 h-10 text-muted-foreground/40" />
               <p className="text-sm font-medium text-foreground">{errorMsg}</p>
               <div className="flex gap-2 flex-col w-full mt-2">
                 <button
@@ -606,7 +603,7 @@ export function CombinarModal({
             <div className="space-y-4">
               <FijaChips fijas={prendasFijas} />
               <p className="text-xs text-muted-foreground">
-                Toca ✕ en una prenda para sustituirla · 🔄 para otro conjunto completo.
+                Toca una prenda para sustituirla · actualiza el conjunto completo con el botón de la derecha.
               </p>
               {outfits.map((outfit, i) => (
                 <OutfitCard
@@ -629,9 +626,10 @@ export function CombinarModal({
                 onClick={() =>
                   generar(outfits.map((o) => o.prenda_ids)).catch(() => null)
                 }
-                className="w-full py-4 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-colors active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-colors active:scale-[0.98]"
               >
-                🔀 Generar de nuevo
+                <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                Generar de nuevo
               </button>
               <button
                 type="button"

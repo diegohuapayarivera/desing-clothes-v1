@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { X, Shirt, Pencil, Trash2, Layers } from 'lucide-react'
 import { OutfitCollage } from './OutfitCollage'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
@@ -89,7 +90,7 @@ function ConjuntoDetalle({
             className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
             aria-label="Cerrar"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -192,17 +193,19 @@ function ConjuntoDetalle({
               <button
                 type="button"
                 onClick={() => setMode('meLoPuse')}
-                className="w-full py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/15 transition-all active:scale-95"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/15 transition-all active:scale-95"
               >
-                👕 Me lo puse
+                <Shirt className="w-4 h-4" />
+                Me lo puse
               </button>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setMode('rename')}
-                  className="flex-1 px-4 py-3 rounded-xl border-2 border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-all active:scale-95"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-all active:scale-95"
                 >
-                  ✏️ Renombrar
+                  <Pencil className="w-3.5 h-3.5" />
+                  Renombrar
                 </button>
                 <button
                   type="button"
@@ -210,7 +213,7 @@ function ConjuntoDetalle({
                   className="px-4 py-3 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/5 transition-all active:scale-95"
                   aria-label="Eliminar conjunto"
                 >
-                  🗑️
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -270,12 +273,14 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
   if (conjuntos.length === 0) {
     return (
       <div className="flex flex-col items-center text-center py-16 px-6">
-        <span className="text-5xl mb-4">👗</span>
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Layers className="w-8 h-8 text-muted-foreground/50" />
+        </div>
         <h3 className="text-lg font-light text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
           Sin conjuntos guardados
         </h3>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-          Pide una recomendación y toca ❤️ para guardar los looks que más te gusten.
+          Pide una recomendación y guarda los looks que más te gusten.
         </p>
       </div>
     )

@@ -1,18 +1,20 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { Shirt, Sparkles, Layers } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { completeOnboarding } from './actions'
 import type { PreferenciaPrendas } from '@/types'
 
 const PREFERENCIAS: {
   value: PreferenciaPrendas
   label: string
-  emoji: string
+  Icon: LucideIcon
   description: string
 }[] = [
-  { value: 'hombre', label: 'Hombre', emoji: '👔', description: 'Ropa masculina' },
-  { value: 'mujer', label: 'Mujer', emoji: '👗', description: 'Ropa femenina' },
-  { value: 'ambas', label: 'Ambas', emoji: '✨', description: 'Todo tipo' },
+  { value: 'hombre', label: 'Hombre', Icon: Shirt, description: 'Ropa masculina' },
+  { value: 'mujer', label: 'Mujer', Icon: Sparkles, description: 'Ropa femenina' },
+  { value: 'ambas', label: 'Ambas', Icon: Layers, description: 'Todo tipo' },
 ]
 
 export function OnboardingForm({ errorParam }: { errorParam?: string }) {
@@ -73,9 +75,7 @@ export function OnboardingForm({ errorParam }: { errorParam?: string }) {
                 ].join(' ')}
                 aria-pressed={isSelected}
               >
-                <span className="text-2xl" aria-hidden="true">
-                  {p.emoji}
-                </span>
+                <p.Icon className="w-7 h-7" aria-hidden="true" />
                 <span className="text-sm font-medium leading-tight">{p.label}</span>
                 <span className="text-xs text-muted-foreground leading-tight">
                   {p.description}

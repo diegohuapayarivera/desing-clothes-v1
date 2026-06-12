@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus } from 'lucide-react'
 import { AgregarPrendaModal } from './AgregarPrendaModal'
 import type { PreferenciaPrendas } from '@/types'
 
 export function EmptyStateAgregar({ preferencia }: { preferencia: PreferenciaPrendas }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
 
   return (
@@ -15,8 +18,8 @@ export function EmptyStateAgregar({ preferencia }: { preferencia: PreferenciaPre
         className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95"
         aria-label="Agregar primera prenda"
       >
-        <span aria-hidden="true">+</span>
-        {' Agregar prenda'}
+        <Plus className="w-4 h-4" aria-hidden="true" />
+        Agregar prenda
       </button>
 
       {open && (
@@ -25,7 +28,7 @@ export function EmptyStateAgregar({ preferencia }: { preferencia: PreferenciaPre
           onClose={() => setOpen(false)}
           onSaved={() => {
             setOpen(false)
-            window.location.reload()
+            router.refresh()
           }}
         />
       )}

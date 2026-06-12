@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { X, Sparkles, Trash2 } from 'lucide-react'
 import { deletePrenda, updatePrendaTags, countConjuntosForPrenda } from '@/app/closet/actions'
 import {
   CATEGORIAS,
@@ -8,7 +9,6 @@ import {
   ESTILOS,
   TEMPORADAS,
   CATEGORIA_LABELS,
-  CATEGORIA_EMOJIS,
   ESTILO_LABELS,
   TEMPORADA_LABELS,
   colorBgStyle,
@@ -18,6 +18,7 @@ import {
   type Estilo,
   type Temporada,
 } from '@/lib/taxonomia'
+import { CATEGORIA_ICONS } from '@/lib/icons'
 import type { PrendaConUrl, PreferenciaPrendas } from '@/types'
 
 interface Props {
@@ -125,7 +126,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
             aria-label="Cerrar"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -145,7 +146,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
 
               {/* Tags */}
               <div className="grid grid-cols-2 gap-3">
-                <TagPill label="Categoría" value={`${CATEGORIA_EMOJIS[prenda.categoria]} ${CATEGORIA_LABELS[prenda.categoria]}`} />
+                <TagPill label="Categoría" value={CATEGORIA_LABELS[prenda.categoria]} />
                 <TagPill label="Tipo" value={prenda.tipo.replace(/_/g, ' ')} capitalize />
                 <TagPill label="Color principal" value={prenda.color_principal} colorDot={prenda.color_principal} capitalize />
                 {prenda.color_secundario && (
@@ -212,7 +213,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                     onClick={onCombinar}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98]"
                   >
-                    <span aria-hidden="true">✨</span>
+                    <Sparkles className="w-4 h-4" aria-hidden="true" />
                     Combinar esta prenda
                   </button>
                 )}
@@ -233,7 +234,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                     className="px-4 py-3 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/5 transition-all active:scale-95"
                     aria-label="Eliminar prenda"
                   >
-                    🗑️
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 </div>
@@ -247,22 +248,25 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground/80">Categoría</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {CATEGORIAS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => handleCatChange(c)}
-                      className={[
-                        'flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-medium transition-all',
-                        editCat === c
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-card text-foreground/70',
-                      ].join(' ')}
-                    >
-                      <span className="text-lg">{CATEGORIA_EMOJIS[c]}</span>
-                      {CATEGORIA_LABELS[c]}
-                    </button>
-                  ))}
+                  {CATEGORIAS.map((c) => {
+                    const Icon = CATEGORIA_ICONS[c]
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => handleCatChange(c)}
+                        className={[
+                          'flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-medium transition-all',
+                          editCat === c
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-card text-foreground/70',
+                        ].join(' ')}
+                      >
+                        <Icon className="w-5 h-5" />
+                        {CATEGORIA_LABELS[c]}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 

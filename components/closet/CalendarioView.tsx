@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useTransition } from 'react'
+import { X, Pencil, Trash2, Heart, Shirt, CalendarDays, ChartNoAxesColumn, ChevronLeft, ChevronRight } from 'lucide-react'
 import { OutfitCollage } from './OutfitCollage'
 import {
   registrarOutfitUsado,
@@ -249,19 +250,28 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
     <div className="space-y-4">
       {/* Sub-view toggle */}
       <div className="flex gap-1 p-1 bg-muted rounded-xl">
-        {(['cal', 'stats'] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => handleSubViewChange(v)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              subView === v
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {v === 'cal' ? '📅 Calendario' : '📊 Estadísticas'}
-          </button>
-        ))}
+        <button
+          onClick={() => handleSubViewChange('cal')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            subView === 'cal'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          Calendario
+        </button>
+        <button
+          onClick={() => handleSubViewChange('stats')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            subView === 'stats'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ChartNoAxesColumn className="w-4 h-4" />
+          Estadísticas
+        </button>
       </div>
 
       {subView === 'cal' && (
@@ -274,7 +284,7 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-40"
               aria-label="Mes anterior"
             >
-              ‹
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <h2
               className="text-base font-medium text-foreground"
@@ -288,7 +298,7 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-40"
               aria-label="Mes siguiente"
             >
-              ›
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
@@ -482,8 +492,8 @@ function DiaDetalle({ fecha, outfit, prendasById, onClose, onDelete, onUpdateFec
           >
             {formatFechaLarga(fecha)}
           </h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 cursor-pointer" aria-label="Cerrar">
-            ✕
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer" aria-label="Cerrar">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -547,15 +557,17 @@ function DiaDetalle({ fecha, outfit, prendasById, onClose, onDelete, onUpdateFec
           <div className="flex gap-2">
             <button
               onClick={() => setShowEditFecha(true)}
-              className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
             >
-              ✏️ Cambiar fecha
+              <Pencil className="w-3.5 h-3.5" />
+              Cambiar fecha
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="py-2.5 px-4 rounded-xl border border-border text-sm text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
+              aria-label="Eliminar registro"
             >
-              🗑️
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -614,24 +626,31 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
             <p className="text-xs text-muted-foreground">Registrar outfit</p>
             <h3 className="text-sm font-medium text-foreground capitalize">{formatFechaLarga(fecha)}</h3>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 cursor-pointer" aria-label="Cerrar">
-            ✕
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer" aria-label="Cerrar">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Mode tabs */}
         <div className="flex gap-1 mx-5 mb-3 p-1 bg-muted rounded-xl">
-          {(['conjuntos', 'prendas'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                mode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-              }`}
-            >
-              {m === 'conjuntos' ? '❤️ Mis conjuntos' : '👗 Elegir prendas'}
-            </button>
-          ))}
+          <button
+            onClick={() => setMode('conjuntos')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              mode === 'conjuntos' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            <Heart className="w-3.5 h-3.5" />
+            Mis conjuntos
+          </button>
+          <button
+            onClick={() => setMode('prendas')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              mode === 'prendas' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            <Shirt className="w-3.5 h-3.5" />
+            Elegir prendas
+          </button>
         </div>
 
         {/* Content */}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useTransition, useEffect } from 'react'
+import { X, Plus, Check } from 'lucide-react'
 import imageCompression from 'browser-image-compression'
 import { savePrenda, deleteFotoHuerfana } from '@/app/closet/actions'
 import {
@@ -9,7 +10,6 @@ import {
   ESTILOS,
   TEMPORADAS,
   CATEGORIA_LABELS,
-  CATEGORIA_EMOJIS,
   ESTILO_LABELS,
   TEMPORADA_LABELS,
   colorBgStyle,
@@ -19,6 +19,7 @@ import {
   type Estilo,
   type Temporada,
 } from '@/lib/taxonomia'
+import { CATEGORIA_ICONS } from '@/lib/icons'
 import type { PreferenciaPrendas, TagsIA } from '@/types'
 
 // ─── Helpers (module-level, no React deps) ───────────────────────────────────
@@ -390,7 +391,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
             aria-label="Cerrar"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -534,7 +535,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                 <p className="text-sm font-medium text-foreground/80">Categoría</p>
                 <ChipGroup options={CATEGORIAS} value={form.categoria} onChange={setCategoria}
                   cols={3}
-                  renderPreview={(c) => <span className="text-lg">{CATEGORIA_EMOJIS[c]}</span>}
+                  renderPreview={(c) => { const Icon = CATEGORIA_ICONS[c]; return <Icon className="w-6 h-6" /> }}
                   renderLabel={(c) => CATEGORIA_LABELS[c]} />
               </div>
 
@@ -678,7 +679,9 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                 </div>
               )}
               <div className="text-center">
-                <div className="text-4xl mb-3">✓</div>
+                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mx-auto mb-3">
+                  <Check className="w-6 h-6 text-primary" />
+                </div>
                 <p className="text-base font-medium text-foreground">
                   {form.tipo ? form.tipo.replace(/_/g, ' ') : 'Prenda'} guardada
                 </p>
@@ -686,8 +689,9 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
               </div>
               <div className="flex flex-col gap-3 w-full">
                 <button type="button" onClick={handleAgregarOtra}
-                  className="w-full px-5 py-3 rounded-xl border-2 border-dashed border-border text-sm font-medium text-foreground/70 hover:border-primary/40 hover:bg-accent/20 transition-all active:scale-95">
-                  + Agregar otra prenda
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border text-sm font-medium text-foreground/70 hover:border-primary/40 hover:bg-accent/20 transition-all active:scale-95">
+                  <Plus className="w-4 h-4" />
+                  Agregar otra prenda
                 </button>
                 <button type="button" onClick={onSaved}
                   className="w-full px-5 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 active:scale-95 transition-all">
