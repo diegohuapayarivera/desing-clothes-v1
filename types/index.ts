@@ -46,6 +46,8 @@ export interface Conjunto {
   created_at: string
 }
 
+export type MotivoFeedback = 'colores' | 'muy_formal' | 'muy_informal' | 'muy_simple' | 'prenda_puntual'
+
 export interface FeedbackOutfit {
   id: string
   user_id: string
@@ -53,6 +55,7 @@ export interface FeedbackOutfit {
   ocasion: string | null
   clima: string | null
   accion: 'descartado' | 'regenerado'
+  motivo: MotivoFeedback | null
   created_at: string
 }
 

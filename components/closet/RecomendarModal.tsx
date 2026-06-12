@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { obtenerClima } from '@/lib/clima'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
-import type { PrendaConUrl, Outfit } from '@/types'
+import type { PrendaConUrl, Outfit, MotivoFeedback } from '@/types'
 import { saveGeoLocation, saveConjunto, saveFeedback } from '@/app/closet/actions'
 import { OutfitCollage } from './OutfitCollage'
 
@@ -22,6 +22,13 @@ const LOADER_MSGS = [
   'Casi listo...',
 ]
 
+const MOTIVOS: { value: MotivoFeedback; label: string }[] = [
+  { value: 'colores', label: 'Los colores no combinan' },
+  { value: 'muy_formal', label: 'Muy formal' },
+  { value: 'muy_informal', label: 'Muy informal' },
+  { value: 'muy_simple', label: 'Muy simple' },
+]
+
 interface Props {
   prendas: PrendaConUrl[]
   ciudad: string | null
@@ -33,6 +40,8 @@ interface Props {
 interface OutfitConPrendas extends Outfit {
   prendas: PrendaConUrl[]
   liked?: boolean
+  discarded?: string[]
+  uid: string
 }
 
 function ClimaInfo({ loading, detectado }: Readonly<{ loading: boolean; detectado: { nivel: NivelClima; temp: number } | null }>) {
@@ -58,6 +67,47 @@ function ClimaInfo({ loading, detectado }: Readonly<{ loading: boolean; detectad
   return null
 }
 
+function MotivoSheet({ onSelect }: Readonly<{ onSelect: (motivo: MotivoFeedback | null) => void }>) {
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-55"
+        onClick={() => onSelect(null)}
+        aria-hidden="true"
+      />
+      <div
+        className="fixed inset-x-0 bottom-0 z-56 max-w-lg mx-auto bg-background rounded-t-2xl shadow-2xl px-5 pt-5 pb-8"
+        role="dialog"
+        aria-label="¿Por qué no te convence?"
+      >
+        <div className="flex justify-center mb-4">
+          <div className="w-8 h-1 rounded-full bg-border" />
+        </div>
+        <p className="text-sm font-medium text-center mb-4 text-foreground">¿Por qué no te convence?</p>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {MOTIVOS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onSelect(value)}
+              className="py-3 px-3 rounded-xl border border-border bg-card text-sm text-center hover:bg-accent/50 active:scale-95 transition-all"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2"
+        >
+          Saltar
+        </button>
+      </div>
+    </>
+  )
+}
+
 function OutfitCard({
   outfit,
   ocasion,
@@ -66,6 +116,7 @@ function OutfitCard({
   onRefresh,
   onRemovePrenda,
   refreshing,
+  replacingPrendaId,
 }: Readonly<{
   outfit: OutfitConPrendas
   ocasion: Ocasion
@@ -74,15 +125,22 @@ function OutfitCard({
   onRefresh: () => void
   onRemovePrenda: (prendaId: string) => void
   refreshing: boolean
+  replacingPrendaId?: string
 }>) {
   const likeClass = outfit.liked
     ? 'border-primary/40 bg-primary/8 text-primary'
     : 'border-border bg-background text-foreground hover:bg-accent/50'
 
+  const busy = refreshing || !!replacingPrendaId
+
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
       <div className="p-3">
-        <OutfitCollage prendas={outfit.prendas} onRemovePrenda={onRemovePrenda} />
+        <OutfitCollage
+          prendas={outfit.prendas}
+          onRemovePrenda={onRemovePrenda}
+          replacingPrendaId={replacingPrendaId}
+        />
       </div>
 
       <div className="px-4 pb-4">
@@ -111,7 +169,8 @@ function OutfitCard({
           <button
             type="button"
             onClick={onLike}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all active:scale-95 ${likeClass}`}
+            disabled={busy}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all active:scale-95 disabled:opacity-50 ${likeClass}`}
             aria-label="Me encanta este conjunto"
           >
             <span aria-hidden="true">{outfit.liked ? '❤️' : '🤍'}</span>
@@ -120,7 +179,7 @@ function OutfitCard({
           <button
             type="button"
             onClick={onRefresh}
-            disabled={refreshing}
+            disabled={busy}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border bg-background text-sm font-medium text-foreground hover:bg-accent/50 transition-colors active:scale-95 disabled:opacity-50"
             aria-label="Ver otra opción"
           >
@@ -141,12 +200,13 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
   const [ocasion, setOcasion] = useState<Ocasion | null>(null)
   const [nivelClima, setNivelClima] = useState<NivelClima | null>(null)
   const [climaDetectado, setClimaDetectado] = useState<{ nivel: NivelClima; temp: number } | null>(null)
-  // Derived: loading while in the clima step and no result yet
   const climaLoading = step === 'clima' && climaDetectado === null
   const [loaderMsg, setLoaderMsg] = useState(LOADER_MSGS[0])
   const [outfits, setOutfits] = useState<OutfitConPrendas[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [refreshingIdx, setRefreshingIdx] = useState<number | null>(null)
+  const [replacingInfo, setReplacingInfo] = useState<{ outfitIdx: number; prendaId: string } | null>(null)
+  const [pendingRefreshIdx, setPendingRefreshIdx] = useState<number | null>(null)
   const [toast, setToast] = useState('')
 
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
@@ -181,6 +241,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     (raw: Outfit[]): OutfitConPrendas[] =>
       raw.map((o) => ({
         ...o,
+        uid: crypto.randomUUID(),
         prendas: o.prenda_ids.map((id) => prendasById.get(id)).filter((p): p is PrendaConUrl => p != null),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,17 +280,15 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
     }
   }
 
-  async function refreshOutfit(idx: number, excludePrendaIds?: string[]) {
+  // Full outfit refresh — triggered after MotivoSheet selection
+  async function refreshOutfit(idx: number, motivo?: MotivoFeedback | null) {
     if (!ocasion || !nivelClima) return
     setRefreshingIdx(idx)
 
     const currentOutfit = outfits[idx]
     const avoidIds = currentOutfit?.prenda_ids ?? []
 
-    if (excludePrendaIds?.length) {
-      saveFeedback({ prenda_ids: excludePrendaIds, ocasion, clima: nivelClima, accion: 'descartado' }).catch(() => null)
-    }
-    saveFeedback({ prenda_ids: avoidIds, ocasion, clima: nivelClima, accion: 'regenerado' }).catch(() => null)
+    saveFeedback({ prenda_ids: avoidIds, ocasion, clima: nivelClima, accion: 'regenerado', motivo }).catch(() => null)
 
     try {
       const res = await fetch('/api/recomendar', {
@@ -239,17 +298,75 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
           ocasion,
           clima: nivelClima,
           avoid: [avoidIds],
-          excludePrendaIds: excludePrendaIds ?? [],
+          ...(motivo ? { motivo } : {}),
         }),
       })
       const data = (await res.json()) as { outfits?: Outfit[]; error?: string }
       if (res.ok && data.outfits && data.outfits.length > 0) {
         const [nuevo] = buildOutfitCon(data.outfits)
-        setOutfits((prev) => prev.map((o, i) => (i === idx ? nuevo : o)))
+        setOutfits((prev) => prev.map((o, i) => (i === idx ? { ...nuevo, discarded: [] } : o)))
       }
     } catch {}
 
     setRefreshingIdx(null)
+  }
+
+  // Surgical single-prenda replacement
+  async function replacePrenda(outfitIdx: number, prendaId: string) {
+    if (!ocasion || !nivelClima) return
+    const outfit = outfits[outfitIdx]
+    if (!outfit) return
+
+    setReplacingInfo({ outfitIdx, prendaId })
+
+    saveFeedback({
+      prenda_ids: [prendaId],
+      ocasion,
+      clima: nivelClima,
+      accion: 'descartado',
+      motivo: 'prenda_puntual',
+    }).catch(() => null)
+
+    const previouslyDiscarded = outfit.discarded ?? []
+
+    try {
+      const res = await fetch('/api/recomendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ocasion,
+          clima: nivelClima,
+          mode: 'replace',
+          outfit_actual: outfit.prenda_ids,
+          prenda_descartada: prendaId,
+          excludePrendaIds: previouslyDiscarded,
+        }),
+      })
+      const data = (await res.json()) as { outfits?: Outfit[]; error?: string }
+      if (res.ok && data.outfits && data.outfits.length > 0) {
+        const [nuevo] = buildOutfitCon(data.outfits)
+        setOutfits((prev) =>
+          prev.map((o, i) =>
+            i === outfitIdx
+              ? { ...nuevo, uid: o.uid, discarded: [...previouslyDiscarded, prendaId] }
+              : o,
+          ),
+        )
+      } else {
+        showToast(data.error ?? 'No se pudo reemplazar la prenda.')
+      }
+    } catch {
+      showToast('Error de red. Intenta de nuevo.')
+    }
+
+    setReplacingInfo(null)
+  }
+
+  async function handleMotivoSelect(motivo: MotivoFeedback | null) {
+    const idx = pendingRefreshIdx
+    setPendingRefreshIdx(null)
+    if (idx === null) return
+    await refreshOutfit(idx, motivo)
   }
 
   async function handleLike(idx: number) {
@@ -424,14 +541,15 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
               </p>
               {outfits.map((outfit, i) => (
                 <OutfitCard
-                  key={outfit.prenda_ids.join('-')}
+                  key={outfit.uid}
                   outfit={outfit}
                   ocasion={ocasion}
                   nivelClima={nivelClima}
                   onLike={() => handleLike(i).catch(() => null)}
-                  onRefresh={() => refreshOutfit(i).catch(() => null)}
-                  onRemovePrenda={(prendaId) => refreshOutfit(i, [prendaId]).catch(() => null)}
+                  onRefresh={() => setPendingRefreshIdx(i)}
+                  onRemovePrenda={(prendaId) => replacePrenda(i, prendaId).catch(() => null)}
                   refreshing={refreshingIdx === i}
+                  replacingPrendaId={replacingInfo?.outfitIdx === i ? replacingInfo.prendaId : undefined}
                 />
               ))}
 
@@ -459,6 +577,10 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
         <div className="fixed bottom-24 inset-x-4 max-w-sm mx-auto z-60 bg-foreground text-background text-sm px-4 py-3 rounded-xl shadow-lg text-center animate-fade-up">
           {toast}
         </div>
+      )}
+
+      {pendingRefreshIdx !== null && (
+        <MotivoSheet onSelect={(m) => handleMotivoSelect(m).catch(() => null)} />
       )}
     </>
   )

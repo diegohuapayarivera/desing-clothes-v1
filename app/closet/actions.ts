@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
+import type { MotivoFeedback } from '@/types'
 
 // ── Conjuntos ──────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export async function saveFeedback(data: {
   ocasion: string | null
   clima: string | null
   accion: 'descartado' | 'regenerado'
+  motivo?: MotivoFeedback | null
 }): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -72,6 +74,7 @@ export async function saveFeedback(data: {
     ocasion: data.ocasion,
     clima: data.clima,
     accion: data.accion,
+    motivo: data.motivo ?? null,
   })
 }
 

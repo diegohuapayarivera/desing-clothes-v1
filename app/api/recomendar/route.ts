@@ -8,7 +8,6 @@ import type { Prenda } from '@/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// Internal type only — not part of the public request contract
 interface PrendaIA {
   id: string
   tipo: string
@@ -19,12 +18,17 @@ interface PrendaIA {
   estampado: boolean
 }
 
-// Client only sends intent — prendas are fetched server-side
 const RequestSchema = z.object({
   ocasion: z.enum(['trabajo', 'casual', 'noche', 'formal', 'deporte']),
   clima: z.enum(['frio', 'templado', 'calor']),
+  // Full mode
   avoid: z.array(z.array(z.string())).optional(),
   excludePrendaIds: z.array(z.string()).optional(),
+  motivo: z.enum(['colores', 'muy_formal', 'muy_informal', 'muy_simple', 'prenda_puntual']).optional(),
+  // Replace mode
+  mode: z.enum(['full', 'replace']).optional(),
+  outfit_actual: z.array(z.string()).optional(),
+  prenda_descartada: z.string().optional(),
 })
 
 const OutfitSchema = z.object({
@@ -40,6 +44,21 @@ interface PersonalizacionCtx {
   favoritos: string[]
   rechazados: string[]
   savedSets: string[][]
+}
+
+const MOTIVO_DESC_LABELS: Record<string, string> = {
+  colores: 'los colores no combinaban',
+  muy_formal: 'muy formal',
+  muy_informal: 'muy informal',
+  muy_simple: 'muy simple',
+  prenda_puntual: 'prenda específica descartada',
+}
+
+const MOTIVO_PROMPT_LABELS: Record<string, string> = {
+  colores: 'los colores no combinaban bien — elige combinaciones más armoniosas',
+  muy_formal: 'era demasiado formal — propón opciones más relajadas',
+  muy_informal: 'era demasiado informal — propón opciones más elegantes',
+  muy_simple: 'era demasiado simple — propón opciones con más personalidad y detalle',
 }
 
 async function fetchPersonalizacion(
@@ -71,7 +90,7 @@ async function fetchPersonalizacion(
       .limit(5),
     supabase
       .from('feedback_outfits')
-      .select('prenda_ids')
+      .select('prenda_ids, motivo')
       .order('created_at', { ascending: false })
       .limit(10),
   ])
@@ -83,7 +102,17 @@ async function fetchPersonalizacion(
       a.localeCompare(b),
     ),
   )
-  const rechazados = (feedbackData ?? []).map((f) => describir(f.prenda_ids)).filter(Boolean)
+  const rechazados = (feedbackData ?? [])
+    .map((f: { prenda_ids: unknown; motivo: unknown }) => {
+      const desc = describir(f.prenda_ids)
+      if (!desc) return ''
+      const motivoStr =
+        typeof f.motivo === 'string' && f.motivo
+          ? ` (rechazado: ${MOTIVO_DESC_LABELS[f.motivo] ?? f.motivo})`
+          : ''
+      return desc + motivoStr
+    })
+    .filter(Boolean)
 
   return { favoritos, rechazados, savedSets }
 }
@@ -100,6 +129,7 @@ function buildPrompt(
   clima: NivelClima,
   personalizacion: PersonalizacionCtx,
   avoid?: string[][],
+  motivo?: string | null,
 ): string {
   const prendasJson = JSON.stringify(
     prendas.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
@@ -128,10 +158,15 @@ function buildPrompt(
       ? `\nCombinaciones rechazadas anteriormente (no repetir tal cual): ${personalizacion.rechazados.join(' | ')}.`
       : ''
 
+  const motivoNote =
+    motivo && MOTIVO_PROMPT_LABELS[motivo]
+      ? `\nIMPORTANTE: El usuario rechazó el conjunto anterior porque ${MOTIVO_PROMPT_LABELS[motivo]}.`
+      : ''
+
   return `Eres un estilista experto en moda. El usuario tiene estas prendas disponibles:
 ${prendasJson}
 
-Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}${favNote}${rechazadosNote}
+Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}${favNote}${rechazadosNote}${motivoNote}
 
 REGLAS OBLIGATORIAS — un conjunto que viole cualquier regla es inválido:
 1. ESTRUCTURA: (exactamente 1 "superior" + exactamente 1 "inferior") O (exactamente 1 "cuerpo_completo"). Nunca mezclar cuerpo_completo con superior o inferior.
@@ -147,6 +182,52 @@ Justificación: 1 frase corta, natural y cercana en español (ej: "El azul marin
 
 Responde ÚNICAMENTE con JSON válido sin markdown:
 {"outfits":[{"prenda_ids":["id1","id2"],"justificacion":"frase corta"}]}`
+}
+
+function buildReplacePrompt(
+  keptItems: PrendaIA[],
+  descartada: PrendaIA,
+  candidatas: PrendaIA[],
+  categoriaDescartada: string,
+  ocasion: Ocasion,
+): string {
+  const colorSec = (p: PrendaIA) => (p.color_secundario ? `/${p.color_secundario}` : '')
+  const desc = (p: PrendaIA) =>
+    `${p.tipo.replaceAll('_', ' ')} ${p.color_principal}${colorSec(p)} (id:"${p.id}")`
+
+  const conjuntoActual = keptItems.map(desc).join(', ')
+  const descartadaDesc = desc(descartada)
+  const candidatasJson = JSON.stringify(
+    candidatas.map(({ id, tipo, categoria, color_principal, color_secundario }) => ({
+      id,
+      tipo,
+      categoria,
+      color_principal,
+      ...(color_secundario ? { color_secundario } : {}),
+    })),
+  )
+  const keepIds = keptItems.map((p) => `"${p.id}"`).join(', ')
+
+  const reemplazoNote =
+    categoriaDescartada === 'cuerpo_completo'
+      ? 'Puedes reemplazar con otro cuerpo_completo O con un superior + un inferior de las candidatas.'
+      : `Elige UNA candidata de categoría "${categoriaDescartada}" que mejor combine con el resto del conjunto.`
+
+  return `Eres un estilista. El usuario quiere cambiar UNA prenda de su conjunto.
+
+Prendas que SE MANTIENEN: ${conjuntoActual || '(ninguna)'}
+Prenda a REEMPLAZAR: ${descartadaDesc}
+Candidatas para el reemplazo (usa SOLO estos IDs): ${candidatasJson}
+
+${reemplazoNote}
+
+REGLAS ESTRICTAS:
+- Incluye TODOS estos IDs sin cambios: [${keepIds}]
+- El/los ID(s) nuevo(s) deben ser exactamente de la lista de candidatas
+- Ocasión: ${OCASION_LABELS[ocasion]}
+- Justificación: 1 frase corta y natural en español
+
+Responde SOLO con JSON: {"prenda_ids":["id1","id2"],"justificacion":"frase"}`
 }
 
 function validateOutfit(
@@ -188,11 +269,12 @@ async function callClaude(
   clima: NivelClima,
   personalizacion: PersonalizacionCtx,
   avoid?: string[][],
+  motivo?: string | null,
 ): Promise<{ prenda_ids: string[]; justificacion: string }[]> {
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid) }],
+    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo) }],
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
@@ -205,6 +287,42 @@ async function callClaude(
 
   return result.data.outfits
 }
+
+async function callClaudeReplace(
+  prompt: string,
+): Promise<z.infer<typeof OutfitSchema> | null> {
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 512,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+  const jsonMatch = /\{[\s\S]*\}/.exec(text)
+  if (!jsonMatch) return null
+
+  const parsed = JSON.parse(jsonMatch[0])
+  const result = OutfitSchema.safeParse(parsed)
+  return result.success ? result.data : null
+}
+
+function verifyReplacement(
+  result: { prenda_ids: string[]; justificacion: string },
+  outfitActual: string[],
+  prendaDescartada: string,
+  candidataIds: Set<string>,
+  prendasById: Map<string, PrendaIA>,
+  clima: NivelClima,
+): boolean {
+  const keepIds = outfitActual.filter((id) => id !== prendaDescartada)
+  if (!keepIds.every((id) => result.prenda_ids.includes(id))) return false
+  const newIds = result.prenda_ids.filter((id) => !keepIds.includes(id))
+  if (newIds.length === 0) return false
+  if (newIds.some((id) => !candidataIds.has(id))) return false
+  return validateOutfit(result, prendasById, clima) === null
+}
+
+const NEUTRAL_COLORS = new Set(['negro', 'blanco', 'gris', 'beige', 'marron'])
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -224,21 +342,184 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
   }
 
-  const { ocasion, clima, avoid, excludePrendaIds } = body
+  const { ocasion, clima, mode } = body
 
-  // Fetch prendas from DB — client is never trusted for this
+  // ── Replace mode ─────────────────────────────────────────────────────────
+  if (mode === 'replace') {
+    const { outfit_actual, prenda_descartada, excludePrendaIds } = body
+
+    if (!outfit_actual?.length || !prenda_descartada) {
+      return NextResponse.json({ error: 'Datos inválidos para modo reemplazo' }, { status: 400 })
+    }
+
+    const { data: prendaRows } = await supabase
+      .from('prendas')
+      .select('*')
+      .eq('user_id', user.id)
+    const allPrendas = (prendaRows ?? []) as Prenda[]
+
+    const prendaDesc = allPrendas.find((p) => p.id === prenda_descartada)
+    if (!prendaDesc) {
+      return NextResponse.json({ error: 'Prenda no encontrada' }, { status: 404 })
+    }
+
+    const categoriaDescartada = prendaDesc.categoria
+
+    const { candidatas: allCandidatas } = filtrarCandidatas(
+      allPrendas.map((p) => ({ ...p, signedUrl: '' })),
+      ocasion,
+      clima,
+    )
+
+    const outfitSet = new Set(outfit_actual)
+    const excludedSet = new Set([prenda_descartada, ...(excludePrendaIds ?? [])])
+
+    const candidatasReplace =
+      categoriaDescartada === 'cuerpo_completo'
+        ? allCandidatas.filter(
+            (p) =>
+              !excludedSet.has(p.id) &&
+              !outfitSet.has(p.id) &&
+              (p.categoria === 'cuerpo_completo' ||
+                p.categoria === 'superior' ||
+                p.categoria === 'inferior'),
+          )
+        : allCandidatas.filter(
+            (p) =>
+              !excludedSet.has(p.id) &&
+              !outfitSet.has(p.id) &&
+              p.categoria === categoriaDescartada,
+          )
+
+    if (candidatasReplace.length === 0) {
+      const catLabel: Record<string, string> = {
+        calzado: 'calzado',
+        superior: 'tops o blusas',
+        inferior: 'pantalones o faldas',
+        abrigo: 'abrigos',
+        accesorio: 'accesorios',
+        cuerpo_completo: 'cuerpos enteros',
+      }
+      const label = catLabel[categoriaDescartada] ?? categoriaDescartada
+      return NextResponse.json(
+        {
+          error: `No tienes otro ${label} disponible para esta combinación — agrega más prendas de ese tipo.`,
+        },
+        { status: 422 },
+      )
+    }
+
+    // Build full prendasById for prompt building + validation
+    const allPrendasIA: PrendaIA[] = allPrendas.map(
+      ({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
+        id,
+        tipo,
+        categoria,
+        color_principal,
+        color_secundario: color_secundario ?? null,
+        estilo,
+        estampado,
+      }),
+    )
+    const prendasById = new Map(allPrendasIA.map((p) => [p.id, p]))
+    const candidataIds = new Set(candidatasReplace.map((c) => c.id))
+    const candidatasIA = candidatasReplace
+      .map((p) => prendasById.get(p.id))
+      .filter((p): p is PrendaIA => p != null)
+
+    const keptItems = outfit_actual
+      .filter((id) => id !== prenda_descartada)
+      .map((id) => prendasById.get(id))
+      .filter((p): p is PrendaIA => p != null)
+
+    const descartadaIA = prendasById.get(prenda_descartada)
+    if (!descartadaIA) {
+      return NextResponse.json({ error: 'Prenda no encontrada en el mapa' }, { status: 404 })
+    }
+
+    const replacePrompt = buildReplacePrompt(
+      keptItems,
+      descartadaIA,
+      candidatasIA,
+      categoriaDescartada,
+      ocasion,
+    )
+
+    const verify = (r: { prenda_ids: string[]; justificacion: string }) =>
+      verifyReplacement(r, outfit_actual, prenda_descartada, candidataIds, prendasById, clima)
+
+    let replacement: { prenda_ids: string[]; justificacion: string } | null = null
+
+    try {
+      const r1 = await callClaudeReplace(replacePrompt)
+      if (r1 && verify(r1)) {
+        replacement = r1
+      } else {
+        const r2 = await callClaudeReplace(replacePrompt)
+        if (r2 && verify(r2)) replacement = r2
+      }
+    } catch {}
+
+    // Programmatic fallback
+    if (!replacement) {
+      const keepIds = outfit_actual.filter((id) => id !== prenda_descartada)
+
+      if (categoriaDescartada === 'cuerpo_completo') {
+        const otroCuerpo = candidatasIA.find((c) => c.categoria === 'cuerpo_completo')
+        if (otroCuerpo) {
+          replacement = {
+            prenda_ids: [...keepIds, otroCuerpo.id],
+            justificacion: 'Una alternativa que combina bien con tu conjunto.',
+          }
+        } else {
+          const sup =
+            candidatasIA.find((c) => c.categoria === 'superior' && NEUTRAL_COLORS.has(c.color_principal)) ??
+            candidatasIA.find((c) => c.categoria === 'superior')
+          const inf =
+            candidatasIA.find((c) => c.categoria === 'inferior' && NEUTRAL_COLORS.has(c.color_principal)) ??
+            candidatasIA.find((c) => c.categoria === 'inferior')
+          if (sup && inf) {
+            replacement = {
+              prenda_ids: [...keepIds, sup.id, inf.id],
+              justificacion: 'Una combinación que funciona con lo que tienes.',
+            }
+          }
+        }
+      } else {
+        const best =
+          candidatasIA.find((c) => NEUTRAL_COLORS.has(c.color_principal)) ?? candidatasIA[0]
+        if (best) {
+          replacement = {
+            prenda_ids: [...keepIds, best.id],
+            justificacion: 'Una opción que combina bien con tu conjunto.',
+          }
+        }
+      }
+    }
+
+    if (!replacement) {
+      return NextResponse.json(
+        { error: 'No se pudo encontrar un reemplazo válido. Intenta de nuevo.' },
+        { status: 422 },
+      )
+    }
+
+    return NextResponse.json({ outfits: [replacement] })
+  }
+
+  // ── Full mode ─────────────────────────────────────────────────────────────
+  const { avoid, excludePrendaIds, motivo } = body
+
   const { data: prendaRows } = await supabase
     .from('prendas')
     .select('*')
     .eq('user_id', user.id)
   const allPrendas = (prendaRows ?? []) as Prenda[]
 
-  // Apply per-prenda exclusion (used by ✕ refresh)
   const prendasParaFiltrar = excludePrendaIds?.length
     ? allPrendas.filter((p) => !excludePrendaIds.includes(p.id))
     : allPrendas
 
-  // Run candidate filter server-side
   const { candidatas, error: filtroError } = filtrarCandidatas(
     prendasParaFiltrar.map((p) => ({ ...p, signedUrl: '' })),
     ocasion,
@@ -248,7 +529,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: filtroError }, { status: 422 })
   }
 
-  // Map to PrendaIA for prompt building
   const prendas: PrendaIA[] = candidatas.map(
     ({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
       id,
@@ -283,7 +563,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid)
+    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid, motivo)
     let validos = filter(primera).filter((o) => !isSavedAlready(o))
 
     if (validos.length < 2) {
