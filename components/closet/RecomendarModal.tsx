@@ -6,7 +6,7 @@ import { obtenerClima } from '@/lib/clima'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
 import type { PrendaConUrl, Outfit, MotivoFeedback } from '@/types'
-import { saveGeoLocation, saveConjunto, saveFeedback } from '@/app/closet/actions'
+import { saveGeoLocation, saveConjunto, saveFeedback, registrarOutfitUsado } from '@/app/closet/actions'
 import { OutfitCollage } from './OutfitCollage'
 
 type Step = 'ocasion' | 'clima' | 'cargando' | 'resultado' | 'error'
@@ -41,6 +41,7 @@ interface OutfitConPrendas extends Outfit {
   prendas: PrendaConUrl[]
   liked?: boolean
   discarded?: string[]
+  registradoHoy?: boolean
   uid: string
 }
 
@@ -115,6 +116,7 @@ function OutfitCard({
   onLike,
   onRefresh,
   onRemovePrenda,
+  onRegistrarHoy,
   refreshing,
   replacingPrendaId,
 }: Readonly<{
@@ -124,6 +126,7 @@ function OutfitCard({
   onLike: () => void
   onRefresh: () => void
   onRemovePrenda: (prendaId: string) => void
+  onRegistrarHoy: () => void
   refreshing: boolean
   replacingPrendaId?: string
 }>) {
@@ -165,7 +168,7 @@ function OutfitCard({
           </span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <button
             type="button"
             onClick={onLike}
@@ -189,6 +192,18 @@ function OutfitCard({
             <span>{refreshing ? 'Buscando...' : 'Otra opción'}</span>
           </button>
         </div>
+        {outfit.registradoHoy ? (
+          <p className="text-xs text-center text-muted-foreground">✓ Registrado para hoy</p>
+        ) : (
+          <button
+            type="button"
+            onClick={onRegistrarHoy}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border bg-background text-sm text-foreground hover:bg-accent/50 transition-colors active:scale-95 disabled:opacity-50"
+          >
+            <span>👕</span> Me lo pongo hoy
+          </button>
+        )}
       </div>
     </div>
   )
@@ -210,6 +225,21 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
   const [toast, setToast] = useState('')
 
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
+
+  async function handleRegistrarHoy(idx: number) {
+    const outfit = outfits[idx]
+    if (!outfit || !ocasion) return
+    const today = new Date().toISOString().split('T')[0]
+    const result = await registrarOutfitUsado({
+      prenda_ids: outfit.prenda_ids,
+      fecha: today,
+      ocasion,
+      force: true,
+    })
+    if (!result.error) {
+      setOutfits((prev) => prev.map((o, i) => i === idx ? { ...o, registradoHoy: true } : o))
+    }
+  }
 
   useEffect(() => {
     if (step !== 'cargando') return
@@ -548,6 +578,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
                   onLike={() => handleLike(i).catch(() => null)}
                   onRefresh={() => setPendingRefreshIdx(i)}
                   onRemovePrenda={(prendaId) => replacePrenda(i, prendaId).catch(() => null)}
+                  onRegistrarHoy={() => handleRegistrarHoy(i).catch(() => null)}
                   refreshing={refreshingIdx === i}
                   replacingPrendaId={replacingInfo?.outfitIdx === i ? replacingInfo.prendaId : undefined}
                 />

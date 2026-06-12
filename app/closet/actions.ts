@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
-import type { MotivoFeedback } from '@/types'
+import type { MotivoFeedback, OutfitUsado } from '@/types'
 
 // ── Conjuntos ──────────────────────────────────────────────────────────────
 
@@ -227,4 +227,117 @@ export async function updatePrendaTags(
 
   revalidatePath('/')
   return {}
+}
+
+// ── Outfits usados ─────────────────────────────────────────────────────────
+
+export async function registrarOutfitUsado(data: {
+  prenda_ids: string[]
+  conjunto_id?: string | null
+  fecha: string
+  ocasion?: string | null
+  force?: boolean
+}): Promise<{ error?: string; alreadyExists?: OutfitUsado }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  if (!data.force) {
+    const { data: existing } = await supabase
+      .from('outfits_usados')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('fecha', data.fecha)
+      .maybeSingle()
+    if (existing) return { alreadyExists: existing as OutfitUsado }
+  }
+
+  const { error } = await supabase
+    .from('outfits_usados')
+    .upsert(
+      {
+        user_id: user.id,
+        prenda_ids: data.prenda_ids,
+        conjunto_id: data.conjunto_id ?? null,
+        fecha: data.fecha,
+        ocasion: data.ocasion ?? null,
+      },
+      { onConflict: 'user_id,fecha' },
+    )
+
+  if (error) return { error: 'Error al registrar el outfit' }
+  revalidatePath('/')
+  return {}
+}
+
+export async function updateOutfitUsado(
+  id: string,
+  updates: { prenda_ids?: string[]; fecha?: string; ocasion?: string | null },
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  const { error } = await supabase
+    .from('outfits_usados')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { error: 'Error al actualizar el outfit' }
+  revalidatePath('/')
+  return {}
+}
+
+export async function deleteOutfitUsado(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+
+  const { error } = await supabase
+    .from('outfits_usados')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) return { error: 'Error al eliminar el outfit' }
+  revalidatePath('/')
+  return {}
+}
+
+export async function fetchOutfitsUsadosMes(year: number, month: number): Promise<OutfitUsado[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const mm = String(month + 1).padStart(2, '0')
+  const firstDay = `${year}-${mm}-01`
+  const lastDate = new Date(year, month + 1, 0).getDate()
+  const lastDay = `${year}-${mm}-${String(lastDate).padStart(2, '0')}`
+
+  const { data } = await supabase
+    .from('outfits_usados')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('fecha', firstDay)
+    .lte('fecha', lastDay)
+    .order('fecha', { ascending: false })
+
+  return (data ?? []) as OutfitUsado[]
+}
+
+export async function fetchOutfitsUsadosRango(desde: string, hasta: string): Promise<OutfitUsado[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data } = await supabase
+    .from('outfits_usados')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('fecha', desde)
+    .lte('fecha', hasta)
+    .order('fecha', { ascending: false })
+
+  return (data ?? []) as OutfitUsado[]
 }

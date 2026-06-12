@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { signOut } from './actions'
 import { ClosetView } from '@/components/closet/ClosetView'
-import type { Profile, Prenda, PrendaConUrl, Conjunto } from '@/types'
+import type { Profile, Prenda, PrendaConUrl, Conjunto, OutfitUsado } from '@/types'
 
 function HangerIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -125,6 +125,25 @@ export default async function HomePage() {
 
   const conjuntos = (conjuntosData ?? []) as Conjunto[]
 
+  // Fetch current month's outfits for the calendar initial view
+  const now = new Date()
+  const calYear = now.getFullYear()
+  const calMonth = now.getMonth() // 0-indexed
+  const calMm = String(calMonth + 1).padStart(2, '0')
+  const calFirstDay = `${calYear}-${calMm}-01`
+  const calLastDate = new Date(calYear, calMonth + 1, 0).getDate()
+  const calLastDay = `${calYear}-${calMm}-${String(calLastDate).padStart(2, '0')}`
+
+  const { data: outfitsUsadosData } = await supabase
+    .from('outfits_usados')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('fecha', calFirstDay)
+    .lte('fecha', calLastDay)
+    .order('fecha', { ascending: false })
+
+  const outfitsUsados = (outfitsUsadosData ?? []) as OutfitUsado[]
+
   const preferencia = profile.preferencia_prendas ?? 'ambas'
   const tieneRopa = prendasConUrls.length > 0
 
@@ -181,6 +200,9 @@ export default async function HomePage() {
           <ClosetView
             prendas={prendasConUrls}
             conjuntos={conjuntos}
+            outfitsUsados={outfitsUsados}
+            initialYear={calYear}
+            initialMonth={calMonth}
             preferencia={preferencia}
             nombreUsuario={profile.nombre}
             ciudad={profile.ciudad}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { OutfitCollage } from './OutfitCollage'
-import { deleteConjunto, renameConjunto } from '@/app/closet/actions'
+import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
 import type { Conjunto, PrendaConUrl } from '@/types'
@@ -25,9 +25,32 @@ function ConjuntoDetalle({
   onDeleted: () => void
   onRenamed: (nombre: string) => void
 }>) {
-  const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting'>('view')
+  const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting' | 'meLoPuse'>('view')
   const [nombreInput, setNombreInput] = useState(conjunto.nombre ?? '')
   const [, startTransition] = useTransition()
+
+  const today = new Date().toISOString().split('T')[0]
+  const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })()
+  const [fechaMeLoPuse, setFechaMeLoPuse] = useState(today)
+  const [registrado, setRegistrado] = useState(false)
+  const [savingRegistro, setSavingRegistro] = useState(false)
+  const [errorRegistro, setErrorRegistro] = useState<string | null>(null)
+
+  async function handleMeLoPuse() {
+    setSavingRegistro(true)
+    setErrorRegistro(null)
+    const result = await registrarOutfitUsado({
+      prenda_ids: conjunto.prenda_ids,
+      conjunto_id: conjunto.id,
+      fecha: fechaMeLoPuse,
+      ocasion: conjunto.ocasion,
+      force: true,
+    })
+    setSavingRegistro(false)
+    if (result.error) { setErrorRegistro('No se pudo registrar. Intenta de nuevo.'); return }
+    setRegistrado(true)
+    setMode('view')
+  }
 
   const label = conjunto.nombre ?? `Conjunto para ${OCASION_LABELS[conjunto.ocasion as Ocasion] ?? conjunto.ocasion}`
 
@@ -162,22 +185,68 @@ function ConjuntoDetalle({
           )}
 
           {mode === 'view' && (
-            <div className="flex gap-3 pt-2">
+            <div className="space-y-3 pt-2">
+              {registrado && (
+                <p className="text-xs text-center text-emerald-600">✓ Registrado el {fechaMeLoPuse}</p>
+              )}
               <button
                 type="button"
-                onClick={() => setMode('rename')}
-                className="flex-1 px-4 py-3 rounded-xl border-2 border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-all active:scale-95"
+                onClick={() => setMode('meLoPuse')}
+                className="w-full py-3 rounded-xl bg-primary/10 border border-primary/20 text-primary text-sm font-medium hover:bg-primary/15 transition-all active:scale-95"
               >
-                ✏️ Renombrar
+                👕 Me lo puse
               </button>
-              <button
-                type="button"
-                onClick={() => setMode('confirmDelete')}
-                className="px-4 py-3 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/5 transition-all active:scale-95"
-                aria-label="Eliminar conjunto"
-              >
-                🗑️
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode('rename')}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-primary/30 text-primary text-sm font-semibold hover:bg-primary/5 transition-all active:scale-95"
+                >
+                  ✏️ Renombrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('confirmDelete')}
+                  className="px-4 py-3 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/5 transition-all active:scale-95"
+                  aria-label="Eliminar conjunto"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'meLoPuse' && (
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-muted-foreground">¿Cuándo lo usaste?</p>
+              <input
+                type="date"
+                value={fechaMeLoPuse}
+                max={today}
+                min={thirtyDaysAgo}
+                onChange={(e) => setFechaMeLoPuse(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-background"
+              />
+              {errorRegistro && (
+                <p className="text-xs text-destructive">{errorRegistro}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('view')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMeLoPuse}
+                  disabled={savingRegistro}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                >
+                  {savingRegistro ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
             </div>
           )}
         </div>

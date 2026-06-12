@@ -132,6 +132,7 @@ function buildPrompt(
   personalizacion: PersonalizacionCtx,
   avoid?: string[][],
   motivo?: string | null,
+  usadosNote?: string,
 ): string {
   const prendasJson = JSON.stringify(
     prendas.map(({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
@@ -165,10 +166,12 @@ function buildPrompt(
       ? `\nIMPORTANTE: El usuario rechazó el conjunto anterior porque ${MOTIVO_PROMPT_LABELS[motivo]}.`
       : ''
 
+  const usadosNoteStr = usadosNote ?? ''
+
   return `Eres un estilista experto en moda. El usuario tiene estas prendas disponibles:
 ${prendasJson}
 
-Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}${favNote}${rechazadosNote}${motivoNote}
+Genera 2-3 conjuntos completos para ocasión: "${OCASION_LABELS[ocasion]}" y clima: ${CLIMA_LABELS[clima]}.${avoidNote}${favNote}${rechazadosNote}${motivoNote}${usadosNoteStr}
 
 REGLAS OBLIGATORIAS — un conjunto que viole cualquier regla es inválido:
 1. ESTRUCTURA: (exactamente 1 "superior" + exactamente 1 "inferior") O (exactamente 1 "cuerpo_completo"). Nunca mezclar cuerpo_completo con superior o inferior.
@@ -272,11 +275,12 @@ async function callClaude(
   personalizacion: PersonalizacionCtx,
   avoid?: string[][],
   motivo?: string | null,
+  usadosNote?: string,
 ): Promise<{ prenda_ids: string[]; justificacion: string }[]> {
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo) }],
+    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote) }],
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
@@ -837,10 +841,48 @@ export async function POST(request: NextRequest) {
   )
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
 
+  // Fetch outfits used in last 7 days for context + deduplication
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const { data: usadosData } = await supabase
+    .from('outfits_usados')
+    .select('prenda_ids, fecha')
+    .eq('user_id', user.id)
+    .gte('fecha', sevenDaysAgo.toISOString().split('T')[0])
+    .order('fecha', { ascending: false })
+  const outfitsUsadosRecientes = (usadosData ?? []) as { prenda_ids: string[]; fecha: string }[]
+
+  // Pre-build prenda descriptions as plain strings to avoid Color enum type conflicts
+  const allPrendasDesc = new Map(
+    allPrendas.map((p) => [p.id, `${p.tipo.replaceAll('_', ' ')} ${p.color_principal}`]),
+  )
+  const describeUsado = (ids: string[]) =>
+    ids
+      .map((id) => allPrendasDesc.get(id))
+      .filter((desc): desc is string => desc !== undefined)
+      .join(' + ')
+
+  const usadosLines = outfitsUsadosRecientes
+    .map((o) => `[${o.fecha}] ${describeUsado(o.prenda_ids)}`)
+    .join('\n')
+  const usadosNote =
+    outfitsUsadosRecientes.length > 0
+      ? `\nOutfits usados recientemente — evita repetir la MISMA combinación exacta:\n${usadosLines}`
+      : undefined
+
   const personalizacion = await fetchPersonalizacion(supabase, ocasion, prendasById)
 
+  const isRecentDuplicate = (outfit: { prenda_ids: string[] }) => {
+    const outfitSet = new Set(outfit.prenda_ids)
+    return outfitsUsadosRecientes.some(
+      (ou) =>
+        ou.prenda_ids.length === outfit.prenda_ids.length &&
+        ou.prenda_ids.every((id) => outfitSet.has(id)),
+    )
+  }
+
   const filter = (raw: { prenda_ids: string[]; justificacion: string }[]) =>
-    raw.filter((o) => validateOutfit(o, prendasById, clima) === null)
+    raw.filter((o) => validateOutfit(o, prendasById, clima) === null && !isRecentDuplicate(o))
 
   const isSavedAlready = (outfit: { prenda_ids: string[] }) => {
     const key = [...outfit.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')
@@ -848,13 +890,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid, motivo)
+    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote)
     let validos = filter(primera).filter((o) => !isSavedAlready(o))
 
     if (validos.length < 2) {
       try {
         const retryAvoid = [...(avoid ?? []), ...validos.map((o) => o.prenda_ids)]
-        const segunda = await callClaude(prendas, ocasion, clima, personalizacion, retryAvoid)
+        const segunda = await callClaude(prendas, ocasion, clima, personalizacion, retryAvoid, undefined, usadosNote)
         validos = deduplicar([...validos, ...filter(segunda).filter((o) => !isSavedAlready(o))])
       } catch {}
     }

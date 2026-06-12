@@ -6,12 +6,13 @@ import { AgregarPrendaModal } from './AgregarPrendaModal'
 import { RecomendarModal } from './RecomendarModal'
 import { CombinarModal } from './CombinarModal'
 import { MisConjuntos } from './MisConjuntos'
+import { CalendarioView } from './CalendarioView'
 import { CATEGORIAS, COLORES, CATEGORIA_LABELS, CATEGORIA_EMOJIS, colorBgStyle } from '@/lib/taxonomia'
 import { validarCompatibilidadFijas } from '@/lib/recomendador'
-import type { PrendaConUrl, PreferenciaPrendas, Conjunto } from '@/types'
+import type { PrendaConUrl, PreferenciaPrendas, Conjunto, OutfitUsado } from '@/types'
 import type { Categoria, Color } from '@/lib/taxonomia'
 
-type Tab = 'closet' | 'conjuntos'
+type Tab = 'closet' | 'conjuntos' | 'calendario'
 
 function reloadPage() {
   globalThis.location.reload()
@@ -20,6 +21,9 @@ function reloadPage() {
 interface Props {
   prendas: PrendaConUrl[]
   conjuntos: Conjunto[]
+  outfitsUsados: OutfitUsado[]
+  initialYear: number
+  initialMonth: number
   preferencia: PreferenciaPrendas
   nombreUsuario: string | null
   ciudad: string | null
@@ -30,6 +34,9 @@ interface Props {
 export function ClosetView({
   prendas: initialPrendas,
   conjuntos,
+  outfitsUsados,
+  initialYear,
+  initialMonth,
   preferencia,
   ciudad,
   profileLat,
@@ -178,6 +185,18 @@ export function ClosetView({
             </span>
           )}
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('calendario')}
+          className={[
+            'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all',
+            tab === 'calendario'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          ].join(' ')}
+        >
+          📅 Calendario
+        </button>
       </div>
 
       {/* ── TAB: MI CLÓSET ── */}
@@ -314,6 +333,17 @@ export function ClosetView({
       {/* ── TAB: MIS CONJUNTOS ── */}
       {tab === 'conjuntos' && (
         <MisConjuntos conjuntos={conjuntos} prendasConUrl={prendas} />
+      )}
+
+      {/* ── TAB: CALENDARIO ── */}
+      {tab === 'calendario' && (
+        <CalendarioView
+          outfitsUsados={outfitsUsados}
+          prendas={prendas}
+          conjuntos={conjuntos}
+          initialYear={initialYear}
+          initialMonth={initialMonth}
+        />
       )}
 
       {/* Detalle modal */}

@@ -59,6 +59,16 @@ export interface FeedbackOutfit {
   created_at: string
 }
 
+export interface OutfitUsado {
+  id: string
+  user_id: string
+  prenda_ids: string[]
+  conjunto_id: string | null
+  fecha: string            // 'YYYY-MM-DD'
+  ocasion: string | null
+  created_at: string
+}
+
 export interface TagsIA {
   categoria: Categoria | null
   tipo: string | null
