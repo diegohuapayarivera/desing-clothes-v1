@@ -14,17 +14,19 @@ function PrendaCell({
   onRemovePrenda,
   isReplacing,
   anyReplacing,
+  isPinned,
 }: Readonly<{
   p: PrendaConUrl
   onRemovePrenda?: (id: string) => void
   isReplacing: boolean
   anyReplacing: boolean
+  isPinned: boolean
 }>) {
   return (
     <div className="relative flex-1 overflow-hidden rounded-lg bg-white">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={p.signedUrl} alt={p.tipo} className="w-full h-full object-cover" loading="lazy" />
-      {onRemovePrenda && !isReplacing && (
+      {onRemovePrenda && !isReplacing && !isPinned && (
         <button
           type="button"
           onClick={() => onRemovePrenda(p.id)}
@@ -34,6 +36,11 @@ function PrendaCell({
         >
           ✕
         </button>
+      )}
+      {isPinned && (
+        <span className="absolute bottom-1 left-1 text-[10px] bg-black/40 text-white px-1.5 py-0.5 rounded-full leading-tight pointer-events-none">
+          Tu elección
+        </span>
       )}
       {isReplacing && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/35 rounded-lg">
@@ -48,10 +55,12 @@ export function OutfitCollage({
   prendas,
   onRemovePrenda,
   replacingPrendaId,
+  pinnedIds,
 }: Readonly<{
   prendas: PrendaConUrl[]
   onRemovePrenda?: (id: string) => void
   replacingPrendaId?: string
+  pinnedIds?: string[]
 }>) {
   const sorted = [...prendas].sort(
     (a, b) => (CAT_ORDER[a.categoria] ?? 9) - (CAT_ORDER[b.categoria] ?? 9),
@@ -65,6 +74,7 @@ export function OutfitCollage({
   )
 
   const anyReplacing = !!replacingPrendaId
+  const pinnedSet = new Set(pinnedIds ?? [])
 
   return (
     <div className="flex gap-1.5 w-full rounded-xl overflow-hidden bg-muted" style={{ aspectRatio: '4/3' }}>
@@ -76,6 +86,7 @@ export function OutfitCollage({
             onRemovePrenda={onRemovePrenda}
             isReplacing={p.id === replacingPrendaId}
             anyReplacing={anyReplacing}
+            isPinned={pinnedSet.has(p.id)}
           />
         ))}
         {main.length === 0 && <div className="flex-1 bg-muted rounded-lg" />}
@@ -90,6 +101,7 @@ export function OutfitCollage({
               onRemovePrenda={onRemovePrenda}
               isReplacing={p.id === replacingPrendaId}
               anyReplacing={anyReplacing}
+              isPinned={pinnedSet.has(p.id)}
             />
           ))}
         </div>

@@ -26,6 +26,7 @@ interface Props {
   onClose: () => void
   onDeleted: () => void
   onUpdated: () => void
+  onCombinar?: () => void
 }
 
 type Mode = 'view' | 'edit' | 'confirmDelete' | 'deleting'
@@ -36,7 +37,7 @@ function Spinner() {
   )
 }
 
-export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdated }: Props) {
+export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdated, onCombinar }: Readonly<Props>) {
   const [mode, setMode] = useState<Mode>('view')
   const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
@@ -204,7 +205,18 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
 
               {/* Actions */}
               {mode === 'view' && (
-                <div className="flex gap-3 pt-2">
+                <div className="space-y-3 pt-2">
+                {onCombinar && (
+                  <button
+                    type="button"
+                    onClick={onCombinar}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98]"
+                  >
+                    <span aria-hidden="true">✨</span>
+                    Combinar esta prenda
+                  </button>
+                )}
+                <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => setMode('edit')}
@@ -223,6 +235,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
                   >
                     🗑️
                   </button>
+                </div>
                 </div>
               )}
             </div>

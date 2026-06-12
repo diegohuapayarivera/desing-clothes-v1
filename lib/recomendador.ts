@@ -117,3 +117,23 @@ export function filtrarCandidatas(
 
   return { candidatas }
 }
+
+export interface ValidarFijasResult {
+  ok: boolean
+  error?: string
+}
+
+export function validarCompatibilidadFijas(
+  fijas: { categoria: string }[],
+): ValidarFijasResult {
+  const cats = fijas.map((f) => f.categoria)
+  const tieneCuerpo = cats.includes('cuerpo_completo')
+  if (tieneCuerpo && (cats.includes('superior') || cats.includes('inferior'))) {
+    return { ok: false, error: 'No puedes fijar un cuerpo entero junto con un top o pantalón.' }
+  }
+  const nonAcc = cats.filter((c) => c !== 'accesorio')
+  if (new Set(nonAcc).size < nonAcc.length) {
+    return { ok: false, error: 'No puedes fijar dos prendas del mismo tipo.' }
+  }
+  return { ok: true }
+}

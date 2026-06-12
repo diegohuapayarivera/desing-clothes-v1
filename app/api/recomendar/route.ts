@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
-import { OCASION_LABELS, filtrarCandidatas } from '@/lib/recomendador'
+import { OCASION_LABELS, filtrarCandidatas, validarCompatibilidadFijas } from '@/lib/recomendador'
 import type { Prenda } from '@/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -26,9 +26,11 @@ const RequestSchema = z.object({
   excludePrendaIds: z.array(z.string()).optional(),
   motivo: z.enum(['colores', 'muy_formal', 'muy_informal', 'muy_simple', 'prenda_puntual']).optional(),
   // Replace mode
-  mode: z.enum(['full', 'replace']).optional(),
+  mode: z.enum(['full', 'replace', 'build_around']).optional(),
   outfit_actual: z.array(z.string()).optional(),
   prenda_descartada: z.string().optional(),
+  // Build-around mode
+  prendas_fijas: z.array(z.string()).min(1).max(2).optional(),
 })
 
 const OutfitSchema = z.object({
@@ -324,6 +326,89 @@ function verifyReplacement(
 
 const NEUTRAL_COLORS = new Set(['negro', 'blanco', 'gris', 'beige', 'marron'])
 
+function deduplicar(
+  outfits: { prenda_ids: string[]; justificacion: string }[],
+): { prenda_ids: string[]; justificacion: string }[] {
+  const seen = new Set<string>()
+  return outfits.filter((o) => {
+    const key = [...o.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function buildBuildAroundPrompt(
+  fijas: PrendaIA[],
+  candidatas: PrendaIA[],
+  ocasion: Ocasion,
+  clima: NivelClima,
+  personalizacion: PersonalizacionCtx,
+  avoid?: string[][],
+): string {
+  const colorSec = (p: PrendaIA) => (p.color_secundario ? `/${p.color_secundario}` : '')
+  const descFija = (p: PrendaIA) =>
+    `${p.tipo.replaceAll('_', ' ')} ${p.color_principal}${colorSec(p)} [id:"${p.id}"]`
+
+  const fijasDesc = fijas.map(descFija).join(' y ')
+  const fijaIds = fijas.map((p) => `"${p.id}"`).join(', ')
+
+  const candidatasJson = JSON.stringify(
+    candidatas.map(({ id, tipo, categoria, color_principal, color_secundario }) => ({
+      id,
+      tipo,
+      categoria,
+      color_principal,
+      ...(color_secundario ? { color_secundario } : {}),
+    })),
+  )
+
+  const avoidNote =
+    avoid && avoid.length > 0
+      ? `\nEvita repetir exactamente estas combinaciones ya mostradas: ${avoid.map((ids) => ids.join('+')).join('; ')}.`
+      : ''
+
+  const favNote =
+    personalizacion.favoritos.length > 0
+      ? `\nEstilo personal del usuario: ${personalizacion.favoritos.join(' | ')}.`
+      : ''
+
+  const abrigo = clima === 'frio' ? 'OBLIGATORIO incluir 1 "abrigo"' : 'Opcional'
+
+  return `Eres un estilista experto. El usuario quiere ponerse SÍ O SÍ: ${fijasDesc}.
+
+Arma 2-3 conjuntos completos ALREDEDOR de esta(s) prenda(s) usando solo las candidatas:
+${candidatasJson}
+
+REGLAS OBLIGATORIAS — un conjunto que viole cualquier regla es inválido:
+1. Cada conjunto DEBE incluir TODOS estos IDs fijados: [${fijaIds}]
+2. Los demás IDs deben ser exactamente de la lista de candidatas
+3. ESTRUCTURA: (1 "superior" + 1 "inferior") O (1 "cuerpo_completo"). No mezclar.
+4. CALZADO: exactamente 1 prenda de categoría "calzado" por conjunto.
+5. ABRIGO: ${abrigo}.
+6. ACCESORIOS: 0 a 2 por conjunto, opcionales.
+7. ESTAMPADO: máximo 1 prenda estampada por conjunto.
+8. COLORES: combina bien. Neutros van con todo. Máximo 2 colores vivos por conjunto.${avoidNote}${favNote}
+
+La justificación debe centrarse en la prenda fija: "El beige de tu pantalón hace brillar la blusa vino."
+
+Responde ÚNICAMENTE con JSON válido sin markdown:
+{"outfits":[{"prenda_ids":["id1","id2"],"justificacion":"frase corta"}]}`
+}
+
+function verifyBuildAround(
+  outfit: { prenda_ids: string[]; justificacion: string },
+  prendasFijasIds: string[],
+  candidataIds: Set<string>,
+  prendasById: Map<string, PrendaIA>,
+  clima: NivelClima,
+): boolean {
+  if (!prendasFijasIds.every((id) => outfit.prenda_ids.includes(id))) return false
+  const newIds = outfit.prenda_ids.filter((id) => !prendasFijasIds.includes(id))
+  if (newIds.some((id) => !candidataIds.has(id))) return false
+  return validateOutfit(outfit, prendasById, clima) === null
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -507,6 +592,216 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ outfits: [replacement] })
   }
 
+  // ── Build-around mode ─────────────────────────────────────────────────────
+  if (mode === 'build_around') {
+    const { prendas_fijas } = body
+
+    if (!prendas_fijas?.length) {
+      return NextResponse.json({ error: 'Datos inválidos para modo build_around' }, { status: 400 })
+    }
+
+    const { data: prendaRows } = await supabase.from('prendas').select('*').eq('user_id', user.id)
+    const allPrendas = (prendaRows ?? []) as Prenda[]
+
+    const fijasPrendas = prendas_fijas.map((id) => allPrendas.find((p) => p.id === id))
+    if (fijasPrendas.some((p) => !p)) {
+      return NextResponse.json({ error: 'Una o más prendas fijas no fueron encontradas' }, { status: 404 })
+    }
+    const prendasFijasObj = fijasPrendas.filter((p): p is Prenda => p != null)
+
+    const compatResult = validarCompatibilidadFijas(prendasFijasObj)
+    if (!compatResult.ok) {
+      return NextResponse.json({ error: compatResult.error }, { status: 422 })
+    }
+
+    // Categories covered by fijas (so we don't send duplicates to Claude)
+    const excludedCandidataCats = new Set<string>()
+    for (const fija of prendasFijasObj) {
+      if (fija.categoria === 'cuerpo_completo') {
+        excludedCandidataCats.add('cuerpo_completo')
+        excludedCandidataCats.add('superior')
+        excludedCandidataCats.add('inferior')
+      } else if (fija.categoria === 'superior') {
+        excludedCandidataCats.add('superior')
+        excludedCandidataCats.add('cuerpo_completo')
+      } else if (fija.categoria === 'inferior') {
+        excludedCandidataCats.add('inferior')
+        excludedCandidataCats.add('cuerpo_completo')
+      } else if (fija.categoria !== 'accesorio') {
+        excludedCandidataCats.add(fija.categoria)
+      }
+    }
+
+    const fijaIds = new Set(prendas_fijas)
+    const nonFijas = allPrendas.filter((p) => !fijaIds.has(p.id))
+
+    const { candidatas: candidatasBase } = filtrarCandidatas(
+      nonFijas.map((p) => ({ ...p, signedUrl: '' })),
+      ocasion,
+      clima,
+    )
+
+    // Verify we can build a complete outfit from fijas + candidatasBase
+    const allAvailableCats = new Set([
+      ...prendasFijasObj.map((p) => p.categoria),
+      ...candidatasBase.map((p) => p.categoria),
+    ])
+    // cuerpo_completo covers superior+inferior and vice-versa for completeness check
+    if (allAvailableCats.has('cuerpo_completo')) {
+      allAvailableCats.add('superior')
+      allAvailableCats.add('inferior')
+    }
+    if (allAvailableCats.has('superior') && allAvailableCats.has('inferior')) {
+      allAvailableCats.add('cuerpo_completo')
+    }
+
+    const tieneBody =
+      allAvailableCats.has('cuerpo_completo') ||
+      (allAvailableCats.has('superior') && allAvailableCats.has('inferior'))
+    if (!tieneBody) {
+      return NextResponse.json(
+        { error: 'No hay tops o pantalones para completar el conjunto alrededor de tu elección — agrega más prendas.' },
+        { status: 422 },
+      )
+    }
+    if (!allAvailableCats.has('calzado')) {
+      return NextResponse.json(
+        { error: 'No hay calzado para completar el conjunto alrededor de tu elección — agrega zapatillas u otro calzado.' },
+        { status: 422 },
+      )
+    }
+    if (clima === 'frio' && !allAvailableCats.has('abrigo')) {
+      return NextResponse.json(
+        { error: 'Hace frío pero no hay abrigos para completar el conjunto — agrega una casaca, chompa o abrigo.' },
+        { status: 422 },
+      )
+    }
+
+    // Candidatas for Claude: exclude categories already covered by fijas
+    const candidatasParaPrompt = candidatasBase.filter((p) => !excludedCandidataCats.has(p.categoria))
+
+    // Build full prendasById (fijas + all candidatas) for validateOutfit
+    const allPrendasIA: PrendaIA[] = allPrendas.map(
+      ({ id, tipo, categoria, color_principal, color_secundario, estilo, estampado }) => ({
+        id, tipo, categoria, color_principal,
+        color_secundario: color_secundario ?? null,
+        estilo, estampado,
+      }),
+    )
+    const prendasById = new Map(allPrendasIA.map((p) => [p.id, p]))
+
+    const fijasIA = prendasFijasObj
+      .map((p) => prendasById.get(p.id))
+      .filter((p): p is PrendaIA => p != null)
+
+    const candidatasIA = candidatasParaPrompt
+      .map((p) => prendasById.get(p.id))
+      .filter((p): p is PrendaIA => p != null)
+
+    const candidataIds = new Set(candidatasIA.map((c) => c.id))
+
+    const personalizacion = await fetchPersonalizacion(supabase, ocasion, prendasById)
+
+    const { avoid } = body
+    const bPrompt = buildBuildAroundPrompt(fijasIA, candidatasIA, ocasion, clima, personalizacion, avoid)
+
+    const verify = (r: { prenda_ids: string[]; justificacion: string }) =>
+      verifyBuildAround(r, prendas_fijas, candidataIds, prendasById, clima)
+
+    const filterBA = (raw: { prenda_ids: string[]; justificacion: string }[]) =>
+      raw.filter(verify)
+
+    let validosBA: { prenda_ids: string[]; justificacion: string }[] = []
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: bPrompt }],
+      })
+      const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+      const jsonMatch = /\{[\s\S]*\}/.exec(text)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        const result = ResponseSchema.safeParse(parsed)
+        if (result.success) validosBA = filterBA(result.data.outfits)
+      }
+    } catch {}
+
+    if (validosBA.length < 2) {
+      try {
+        const retryAvoid = [...(avoid ?? []), ...validosBA.map((o) => o.prenda_ids)]
+        const bPrompt2 = buildBuildAroundPrompt(fijasIA, candidatasIA, ocasion, clima, personalizacion, retryAvoid)
+        const message2 = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: bPrompt2 }],
+        })
+        const text2 = message2.content[0].type === 'text' ? message2.content[0].text.trim() : ''
+        const jsonMatch2 = /\{[\s\S]*\}/.exec(text2)
+        if (jsonMatch2) {
+          const parsed2 = JSON.parse(jsonMatch2[0])
+          const result2 = ResponseSchema.safeParse(parsed2)
+          if (result2.success) {
+            validosBA = deduplicar([...validosBA, ...filterBA(result2.data.outfits)])
+          }
+        }
+      } catch {}
+    }
+
+    // Programmatic fallback
+    if (validosBA.length === 0) {
+      const baseIds = [...prendas_fijas]
+
+      const needsBody = !prendasFijasObj.some(
+        (p) => p.categoria === 'cuerpo_completo' || p.categoria === 'superior',
+      )
+      const needsInferior = !prendasFijasObj.some(
+        (p) => p.categoria === 'cuerpo_completo' || p.categoria === 'inferior',
+      )
+      const needsCalzado = !prendasFijasObj.some((p) => p.categoria === 'calzado')
+      const needsAbrigo = clima === 'frio' && !prendasFijasObj.some((p) => p.categoria === 'abrigo')
+
+      if (needsBody) {
+        const sup =
+          candidatasIA.find((c) => c.categoria === 'superior' && NEUTRAL_COLORS.has(c.color_principal)) ??
+          candidatasIA.find((c) => c.categoria === 'superior')
+        if (sup) baseIds.push(sup.id)
+      }
+      if (needsInferior) {
+        const inf =
+          candidatasIA.find((c) => c.categoria === 'inferior' && NEUTRAL_COLORS.has(c.color_principal)) ??
+          candidatasIA.find((c) => c.categoria === 'inferior')
+        if (inf) baseIds.push(inf.id)
+      }
+      if (needsCalzado) {
+        const cal =
+          candidatasIA.find((c) => c.categoria === 'calzado' && NEUTRAL_COLORS.has(c.color_principal)) ??
+          candidatasIA.find((c) => c.categoria === 'calzado')
+        if (cal) baseIds.push(cal.id)
+      }
+      if (needsAbrigo) {
+        const abr =
+          candidatasIA.find((c) => c.categoria === 'abrigo' && NEUTRAL_COLORS.has(c.color_principal)) ??
+          candidatasIA.find((c) => c.categoria === 'abrigo')
+        if (abr) baseIds.push(abr.id)
+      }
+
+      const fallback = { prenda_ids: baseIds, justificacion: 'Una combinación que funciona bien con tu elección.' }
+      if (validateOutfit(fallback, prendasById, clima) === null) {
+        validosBA = [fallback]
+      }
+    }
+
+    if (validosBA.length === 0) {
+      return NextResponse.json(
+        { error: 'No se pudieron generar conjuntos válidos alrededor de tu elección. Intenta de nuevo.' },
+        { status: 422 },
+      )
+    }
+
+    return NextResponse.json({ outfits: deduplicar(validosBA).slice(0, 3) })
+  }
+
   // ── Full mode ─────────────────────────────────────────────────────────────
   const { avoid, excludePrendaIds, motivo } = body
 
@@ -546,16 +841,6 @@ export async function POST(request: NextRequest) {
 
   const filter = (raw: { prenda_ids: string[]; justificacion: string }[]) =>
     raw.filter((o) => validateOutfit(o, prendasById, clima) === null)
-
-  const deduplicar = (outfits: { prenda_ids: string[]; justificacion: string }[]) => {
-    const seen = new Set<string>()
-    return outfits.filter((o) => {
-      const key = [...o.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }
 
   const isSavedAlready = (outfit: { prenda_ids: string[] }) => {
     const key = [...outfit.prenda_ids].sort((a, b) => a.localeCompare(b)).join(',')

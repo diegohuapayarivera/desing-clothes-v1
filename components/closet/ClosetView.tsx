@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { PrendaDetalle } from './PrendaDetalle'
 import { AgregarPrendaModal } from './AgregarPrendaModal'
 import { RecomendarModal } from './RecomendarModal'
+import { CombinarModal } from './CombinarModal'
 import { MisConjuntos } from './MisConjuntos'
 import { CATEGORIAS, COLORES, CATEGORIA_LABELS, CATEGORIA_EMOJIS, colorBgStyle } from '@/lib/taxonomia'
+import { validarCompatibilidadFijas } from '@/lib/recomendador'
 import type { PrendaConUrl, PreferenciaPrendas, Conjunto } from '@/types'
 import type { Categoria, Color } from '@/lib/taxonomia'
 
@@ -41,10 +43,16 @@ export function ClosetView({
   const [showAgregar, setShowAgregar] = useState(false)
   const [showRecomendar, setShowRecomendar] = useState(false)
 
+  // Modo selección múltiple
+  const [modoSeleccion, setModoSeleccion] = useState(false)
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set())
+  const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null)
+  const [showCombinar, setShowCombinar] = useState<PrendaConUrl[] | null>(null)
+
   function toggleCat(cat: Categoria) {
     setFiltroCats((prev) => {
       const next = new Set(prev)
-      next.has(cat) ? next.delete(cat) : next.add(cat)
+      if (next.has(cat)) { next.delete(cat) } else { next.add(cat) }
       return next
     })
   }
@@ -52,9 +60,39 @@ export function ClosetView({
   function toggleColor(color: Color) {
     setFiltroColores((prev) => {
       const next = new Set(prev)
-      next.has(color) ? next.delete(color) : next.add(color)
+      if (next.has(color)) { next.delete(color) } else { next.add(color) }
       return next
     })
+  }
+
+  function salirModoSeleccion() {
+    setModoSeleccion(false)
+    setSeleccionadas(new Set())
+    setErrorSeleccion(null)
+  }
+
+  function toggleSeleccion(id: string) {
+    setErrorSeleccion(null)
+    setSeleccionadas((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else if (next.size < 2) {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function confirmarCombinar() {
+    const selArray = Array.from(seleccionadas)
+    const prendasSel = selArray.map((id) => prendas.find((p) => p.id === id)).filter((p): p is PrendaConUrl => p != null)
+    const result = validarCompatibilidadFijas(prendasSel)
+    if (!result.ok) {
+      setErrorSeleccion(result.error ?? 'Prendas incompatibles.')
+      return
+    }
+    setShowCombinar(prendasSel)
   }
 
   const filtradas = prendas.filter((p) => {
@@ -68,15 +106,46 @@ export function ClosetView({
   return (
     <>
       {/* ¿Qué me pongo hoy? CTA */}
-      <button
-        type="button"
-        onClick={() => setShowRecomendar(true)}
-        className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] mb-3 shadow-sm"
-        aria-label="Recibir recomendación de outfit"
-      >
-        <span aria-hidden="true">✨</span>
-        {' ¿Qué me pongo hoy?'}
-      </button>
+      {!modoSeleccion && (
+        <button
+          type="button"
+          onClick={() => setShowRecomendar(true)}
+          className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] mb-2 shadow-sm"
+          aria-label="Recibir recomendación de outfit"
+        >
+          <span aria-hidden="true">✨</span>
+          {' ¿Qué me pongo hoy?'}
+        </button>
+      )}
+
+      {/* Combinar prendas CTA */}
+      {!modoSeleccion && (
+        <button
+          type="button"
+          onClick={() => { setModoSeleccion(true); setTab('closet') }}
+          className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98] mb-3"
+        >
+          <span aria-hidden="true">👗</span>
+          {' Combinar prendas'}
+        </button>
+      )}
+
+      {/* Barra modo selección */}
+      {modoSeleccion && (
+        <div className="flex items-center justify-between mb-3 px-1">
+          <p className="text-sm font-medium text-foreground">
+            Elige 1 o 2 prendas para combinar
+          </p>
+          <button
+            type="button"
+            onClick={salirModoSeleccion}
+            className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-border transition-colors"
+            aria-label="Cancelar selección"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/50 rounded-xl p-1 mb-5">
@@ -114,86 +183,102 @@ export function ClosetView({
       {/* ── TAB: MI CLÓSET ── */}
       {tab === 'closet' && (
         <>
-          {/* Agregar button */}
-          <button
-            type="button"
-            onClick={() => setShowAgregar(true)}
-            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95 mb-6"
-            aria-label="Agregar prenda"
-          >
-            <span aria-hidden="true">+</span>
-            {' Agregar prenda'}
-          </button>
+          {/* Agregar button — oculto en modo selección */}
+          {!modoSeleccion && (
+            <button
+              type="button"
+              onClick={() => setShowAgregar(true)}
+              className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95 mb-6"
+              aria-label="Agregar prenda"
+            >
+              <span aria-hidden="true">+</span>
+              {' Agregar prenda'}
+            </button>
+          )}
 
-          {/* Filters row — categorías */}
-          <div className="space-y-3 mb-5">
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {CATEGORIAS.map((cat) => {
-                const active = filtroCats.has(cat)
-                return (
+          {/* Filters — ocultos en modo selección */}
+          {!modoSeleccion && (
+            <div className="space-y-3 mb-5">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {CATEGORIAS.map((cat) => {
+                  const active = filtroCats.has(cat)
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => toggleCat(cat)}
+                      className={[
+                        'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                        active
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card border-border text-foreground/70 hover:border-primary/40',
+                      ].join(' ')}
+                    >
+                      <span>{CATEGORIA_EMOJIS[cat]}</span>
+                      {CATEGORIA_LABELS[cat]}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {COLORES.map((color) => {
+                  const active = filtroColores.has(color)
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => toggleColor(color)}
+                      title={color}
+                      className={[
+                        'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                        active
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card border-border text-foreground/70 hover:border-primary/40',
+                      ].join(' ')}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-black/10 shrink-0"
+                        style={colorBgStyle(color)}
+                      />
+                      <span className="capitalize">{color}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {filtradas.length}{' '}
+                  {filtradas.length === 1 ? 'prenda' : 'prendas'}
+                  {hayFiltros ? ' filtradas' : ' en total'}
+                </p>
+                {hayFiltros && (
                   <button
-                    key={cat}
                     type="button"
-                    onClick={() => toggleCat(cat)}
-                    className={[
-                      'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
-                      active
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-card border-border text-foreground/70 hover:border-primary/40',
-                    ].join(' ')}
+                    onClick={() => { setFiltroCats(new Set()); setFiltroColores(new Set()) }}
+                    className="text-xs text-primary hover:underline"
                   >
-                    <span>{CATEGORIA_EMOJIS[cat]}</span>
-                    {CATEGORIA_LABELS[cat]}
+                    Limpiar filtros
                   </button>
-                )
-              })}
+                )}
+              </div>
             </div>
+          )}
 
-            {/* Colors row */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {COLORES.map((color) => {
-                const active = filtroColores.has(color)
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => toggleColor(color)}
-                    title={color}
-                    className={[
-                      'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
-                      active
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-card border-border text-foreground/70 hover:border-primary/40',
-                    ].join(' ')}
-                  >
-                    <span
-                      className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-                      style={colorBgStyle(color)}
-                    />
-                    <span className="capitalize">{color}</span>
-                  </button>
-                )
-              })}
-            </div>
+          {/* Instrucción en modo selección */}
+          {modoSeleccion && (
+            <p className="text-xs text-muted-foreground mb-4">
+              {seleccionadas.size === 0 && 'Toca las prendas que quieres ponerse sí o sí (máximo 2).'}
+              {seleccionadas.size === 1 && '1 prenda seleccionada — toca otra o presiona Combinar.'}
+              {seleccionadas.size === 2 && '2 prendas seleccionadas.'}
+            </p>
+          )}
 
-            {/* Counter + clear */}
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                {filtradas.length}{' '}
-                {filtradas.length === 1 ? 'prenda' : 'prendas'}
-                {hayFiltros ? ' filtradas' : ' en total'}
-              </p>
-              {hayFiltros && (
-                <button
-                  type="button"
-                  onClick={() => { setFiltroCats(new Set()); setFiltroColores(new Set()) }}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Error de compatibilidad */}
+          {errorSeleccion && (
+            <p className="text-xs text-destructive bg-destructive/5 rounded-lg px-3 py-2 mb-4">
+              {errorSeleccion}
+            </p>
+          )}
 
           {/* Grid */}
           {filtradas.length === 0 ? (
@@ -206,8 +291,20 @@ export function ClosetView({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {filtradas.map((p) => (
-                <PrendaCard key={p.id} prenda={p} onClick={() => setDetalle(p)} />
+              {prendas.map((p) => (
+                <PrendaCard
+                  key={p.id}
+                  prenda={p}
+                  modoSeleccion={modoSeleccion}
+                  isSelected={seleccionadas.has(p.id)}
+                  onClick={() => {
+                    if (modoSeleccion) {
+                      toggleSeleccion(p.id)
+                    } else {
+                      setDetalle(p)
+                    }
+                  }}
+                />
               ))}
             </div>
           )}
@@ -232,6 +329,10 @@ export function ClosetView({
           onUpdated={() => {
             setDetalle(null)
             reloadPage()
+          }}
+          onCombinar={() => {
+            setShowCombinar([detalle])
+            setDetalle(null)
           }}
         />
       )}
@@ -258,17 +359,67 @@ export function ClosetView({
           onClose={() => setShowRecomendar(false)}
         />
       )}
+
+      {/* Combinar modal */}
+      {showCombinar && (
+        <CombinarModal
+          prendasFijas={showCombinar}
+          prendas={prendas}
+          ciudad={ciudad}
+          profileLat={profileLat}
+          profileLon={profileLon}
+          onClose={() => {
+            setShowCombinar(null)
+            salirModoSeleccion()
+          }}
+        />
+      )}
+
+      {/* Barra fija de acción en modo selección */}
+      {modoSeleccion && seleccionadas.size >= 1 && (
+        <div className="fixed bottom-0 inset-x-0 max-w-lg mx-auto z-30 px-4 pb-6 pt-3 bg-background/95 backdrop-blur-sm border-t border-border">
+          <button
+            type="button"
+            onClick={confirmarCombinar}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-lg"
+          >
+            <span aria-hidden="true">✨</span>
+            {`Combinar (${seleccionadas.size})`}
+          </button>
+        </div>
+      )}
     </>
   )
 }
 
-function PrendaCard({ prenda, onClick }: Readonly<{ prenda: PrendaConUrl; onClick: () => void }>) {
+function PrendaCard({
+  prenda,
+  modoSeleccion,
+  isSelected,
+  onClick,
+}: Readonly<{
+  prenda: PrendaConUrl
+  modoSeleccion: boolean
+  isSelected: boolean
+  onClick: () => void
+}>) {
+  let borderClass = 'border-border hover:border-primary/30 hover:shadow-md'
+  if (modoSeleccion) {
+    borderClass = isSelected ? 'border-primary ring-2 ring-primary/40 shadow-md' : 'border-border hover:border-primary/50'
+  }
+
+  let ariaAction = 'Ver detalle de'
+  if (modoSeleccion) {
+    ariaAction = isSelected ? 'Deseleccionar' : 'Seleccionar'
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex flex-col rounded-2xl overflow-hidden border border-border bg-card hover:border-primary/30 hover:shadow-md transition-all duration-200 active:scale-[0.97] text-left"
-      aria-label={`Ver detalle de ${prenda.tipo}`}
+      className={`group relative flex flex-col rounded-2xl overflow-hidden border bg-card transition-all duration-200 active:scale-[0.97] text-left ${borderClass}`}
+      aria-label={`${ariaAction} ${prenda.tipo}`}
+      aria-pressed={modoSeleccion ? isSelected : undefined}
     >
       <div className="aspect-square w-full overflow-hidden bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -278,6 +429,14 @@ function PrendaCard({ prenda, onClick }: Readonly<{ prenda: PrendaConUrl; onClic
           className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
           loading="lazy"
         />
+        {/* Overlay de selección */}
+        {modoSeleccion && isSelected && (
+          <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+              <span className="text-primary-foreground text-sm font-bold">✓</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="px-3 py-2.5">
