@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
 
   let imageBytes: Uint8Array
   let mimeType: 'image/webp' | 'image/jpeg' | 'image/png'
+  // Bytes used for AI tagging — original photo when available (faithful colors).
+  let imageBytesForAI: Uint8Array
+  let mimeTypeForAI: 'image/webp' | 'image/jpeg' | 'image/png'
 
   try {
     const formData = await request.formData()
@@ -93,11 +96,28 @@ export async function POST(request: NextRequest) {
         : file.type === 'image/webp'
           ? 'image/webp'
           : 'image/jpeg'
+
+    // image_original is the unprocessed photo sent alongside the white-bg version.
+    // Use it for AI so Claude sees the real colors, not the composited result.
+    const fileOriginal = formData.get('image_original')
+    if (fileOriginal instanceof Blob) {
+      const bufferOrig = await fileOriginal.arrayBuffer()
+      imageBytesForAI = new Uint8Array(bufferOrig)
+      mimeTypeForAI =
+        fileOriginal.type === 'image/png'
+          ? 'image/png'
+          : fileOriginal.type === 'image/webp'
+            ? 'image/webp'
+            : 'image/jpeg'
+    } else {
+      imageBytesForAI = imageBytes
+      mimeTypeForAI = mimeType
+    }
   } catch {
     return NextResponse.json({ error: 'Error al leer la imagen' }, { status: 400 })
   }
 
-  // Upload to Supabase Storage
+  // Upload to Supabase Storage (always the processed/composited image)
   const uuid = crypto.randomUUID()
   const extension = mimeType === 'image/webp' ? 'webp' : mimeType === 'image/png' ? 'png' : 'jpg'
   const fotoPath = `${user.id}/${uuid}.${extension}`
@@ -121,11 +141,11 @@ export async function POST(request: NextRequest) {
     temporada: Tags['temporada']
   }
 
-  // Call Claude Haiku for auto-tagging
+  // Call Claude Haiku for auto-tagging (uses original photo bytes for faithful colors)
   let tags: ApiTags | null = null
 
   try {
-    const base64 = Buffer.from(imageBytes).toString('base64')
+    const base64 = Buffer.from(imageBytesForAI).toString('base64')
 
     const prompt = `Analiza esta imagen de una prenda de ropa. Clasifícala usando ÚNICAMENTE los valores exactos de las listas que se muestran abajo.
 
@@ -151,7 +171,7 @@ Responde con este JSON exacto:
           content: [
             {
               type: 'image',
-              source: { type: 'base64', media_type: mimeType, data: base64 },
+              source: { type: 'base64', media_type: mimeTypeForAI, data: base64 },
             },
             { type: 'text', text: prompt },
           ],

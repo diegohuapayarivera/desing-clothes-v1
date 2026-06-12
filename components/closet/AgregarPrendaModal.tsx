@@ -23,7 +23,7 @@ import type { PreferenciaPrendas, TagsIA } from '@/types'
 
 // ─── Helpers (module-level, no React deps) ───────────────────────────────────
 
-async function composeOnWhite(blob: Blob): Promise<Blob> {
+async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(blob)
@@ -35,17 +35,45 @@ async function composeOnWhite(blob: Blob): Promise<Blob> {
         if (w >= h) { h = Math.round(h * maxSize / w); w = maxSize }
         else { w = Math.round(w * maxSize / h); h = maxSize }
       }
+
+      // Step 1: draw noBg blob and apply alpha threshold to recover true colors.
+      // Without this, partial-alpha edge pixels blend with white and wash out the color.
+      const alphaCanvas = document.createElement('canvas')
+      alphaCanvas.width = w
+      alphaCanvas.height = h
+      const alphaCtx = alphaCanvas.getContext('2d', { willReadFrequently: true })
+      if (!alphaCtx) { URL.revokeObjectURL(url); reject(new Error('no ctx')); return }
+      alphaCtx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+
+      const imageData = alphaCtx.getImageData(0, 0, w, h)
+      const data = imageData.data
+      let opaqueCount = 0
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 60) {
+          data[i + 3] = 255
+          opaqueCount++
+        } else {
+          data[i + 3] = 0
+        }
+      }
+      alphaCtx.putImageData(imageData, 0, 0)
+
+      // Step 2: compose thresholded image on white background
       const canvas = document.createElement('canvas')
       canvas.width = w
       canvas.height = h
       const ctx = canvas.getContext('2d')
-      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('no ctx')); return }
+      if (!ctx) { reject(new Error('no ctx')); return }
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, w, h)
-      ctx.drawImage(img, 0, 0, w, h)
-      URL.revokeObjectURL(url)
+      ctx.drawImage(alphaCanvas, 0, 0)
+
       canvas.toBlob(
-        (b) => { b ? resolve(b) : reject(new Error('canvas export failed')) },
+        (b) => {
+          if (b) { resolve({ result: b, opacityRatio: opaqueCount / (w * h) }) }
+          else { reject(new Error('canvas export failed')) }
+        },
         'image/webp',
         0.85,
       )
@@ -146,6 +174,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [analysisLabel, setAnalysisLabel] = useState('Procesando...')
   const [quitarFondo, setQuitarFondo] = useState(true)
+  const [badMaskNotice, setBadMaskNotice] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>({
     foto_path: '',
     categoria: null,
@@ -185,40 +214,56 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     const file = e.target.files?.[0]
     if (!file) return
     setError(null)
+    setBadMaskNotice(null)
     setStep('analyzing')
 
     let processedBlob: Blob
+    // Compressed original (jpeg) — always sent to /api/etiquetar as image_original
+    // so Claude sees faithful colors even when processedBlob has a white background.
+    let compressedOriginal: Blob | null = null
 
     if (quitarFondo) {
-      // ── Phase 1: remove background ──────────────────────────────────────────
       setAnalysisLabel('Recortando prenda...')
+      // Start compressing original immediately so it runs in parallel with bg removal.
+      const compressTask = imageCompression(file, {
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 1024,
+        fileType: 'image/jpeg',
+        useWebWorker: true,
+      })
       try {
         const { removeBackground } = await import('@imgly/background-removal')
-        const noBg = await withTimeout(
-          removeBackground(file, {
-            progress: (key: string, current: number, total: number) => {
-              if (total > 0 && key.startsWith('fetch')) {
-                const pct = Math.round((current / total) * 100)
-                setAnalysisLabel(`Descargando modelo... ${pct}%`)
-              } else {
-                setAnalysisLabel('Recortando prenda...')
-              }
-            },
-          }),
-          20_000,
-        )
-        processedBlob = await composeOnWhite(noBg)
+        const [noBg, compressed] = await Promise.all([
+          withTimeout(
+            removeBackground(file, {
+              model: 'isnet',
+              progress: (key: string, current: number, total: number) => {
+                if (total > 0 && key.startsWith('fetch')) {
+                  const pct = Math.round((current / total) * 100)
+                  setAnalysisLabel(`Descargando modelo... ${pct}%`)
+                } else {
+                  setAnalysisLabel('Recortando prenda...')
+                }
+              },
+            }),
+            20_000,
+          ),
+          compressTask,
+        ])
+        compressedOriginal = compressed
+        const { result, opacityRatio } = await composeOnWhite(noBg)
+        if (opacityRatio < 0.15 || opacityRatio > 0.95) {
+          // Bad mask: almost nothing or almost everything was cut. Use original.
+          processedBlob = compressedOriginal
+          setBadMaskNotice('No pudimos aislar bien la prenda — se guardó la foto original.')
+        } else {
+          processedBlob = result
+        }
       } catch {
-        // Fallback: compress original
-        processedBlob = await imageCompression(file, {
-          maxSizeMB: 0.2,
-          maxWidthOrHeight: 1024,
-          fileType: 'image/webp',
-          useWebWorker: true,
-        })
+        compressedOriginal = await compressTask
+        processedBlob = compressedOriginal
       }
     } else {
-      // ── No bg removal: just compress ────────────────────────────────────────
       processedBlob = await imageCompression(file, {
         maxSizeMB: 0.2,
         maxWidthOrHeight: 1024,
@@ -227,15 +272,18 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
       })
     }
 
-    // Show preview immediately after processing
     const objectUrl = URL.createObjectURL(processedBlob)
     setPreview(objectUrl)
 
-    // ── Phase 2: upload + AI tagging ─────────────────────────────────────────
     setAnalysisLabel('Analizando prenda...')
     try {
       const fd = new FormData()
       fd.append('image', processedBlob, 'prenda.webp')
+      // Send original separately so the server uses it for AI color detection.
+      // Skip when compressedOriginal IS processedBlob (bad-mask fallback) to avoid duplication.
+      if (compressedOriginal !== null && compressedOriginal !== processedBlob) {
+        fd.append('image_original', compressedOriginal, 'original.jpg')
+      }
       const res = await fetch('/api/etiquetar', { method: 'POST', body: fd })
       if (!res.ok) throw new Error('server error')
       const data: { foto_path: string; tags: TagsIA | null } = await res.json()
@@ -299,6 +347,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     setStep('capture')
     setPreview(null)
     setError(null)
+    setBadMaskNotice(null)
     setAnalysisLabel('Procesando...')
     setForm({
       foto_path: '',
@@ -466,6 +515,12 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                     <p className="text-xs text-muted-foreground">Revisa y ajusta las etiquetas</p>
                   </div>
                 </div>
+              )}
+
+              {badMaskNotice && (
+                <p className="text-xs text-amber-700 bg-amber-50 px-4 py-3 rounded-xl">
+                  {badMaskNotice}
+                </p>
               )}
 
               {error && (
