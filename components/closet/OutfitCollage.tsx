@@ -32,7 +32,7 @@ function PrendaCell({
   return (
     <div
       className="relative flex-1 overflow-hidden rounded-lg bg-white cursor-pointer select-none"
-      onClick={onTap}
+      onClick={(e) => { e.stopPropagation(); onTap() }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onTap() }}
@@ -104,7 +104,8 @@ function PrendaViewer({
   return (
     <div
       className="fixed inset-0 z-100 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={(e) => { e.stopPropagation(); onClose() }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
     >
       <div
         className="relative bg-white rounded-2xl overflow-hidden w-full max-w-sm shadow-2xl flex flex-col md:max-w-md"
@@ -190,9 +191,9 @@ function PrendaViewer({
 
         {prendas.length > 1 && (
           <div className="flex justify-center gap-1.5 pb-3">
-            {prendas.map((_, i) => (
+            {prendas.map((p, i) => (
               <button
-                key={i}
+                key={p.id}
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setIdx(i) }}
                 className={[
