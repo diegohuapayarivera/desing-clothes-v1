@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { X, Shirt, Pencil, Trash2, Layers } from 'lucide-react'
-import { OutfitCollage } from './OutfitCollage'
+import { OutfitCollage, PrendaViewer } from './OutfitCollage'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -261,6 +261,7 @@ function ConjuntoDetalle({
 export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Readonly<Props>) {
   const [conjuntos, setConjuntos] = useState(initialConjuntos)
   const [detalle, setDetalle] = useState<Conjunto | null>(null)
+  const [visorPrendas, setVisorPrendas] = useState<{ prendas: PrendaConUrl[]; idx: number } | null>(null)
 
   const prendasById = new Map(prendasConUrl.map((p) => [p.id, p]))
 
@@ -301,7 +302,10 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
               aria-label={`Ver conjunto ${label}`}
             >
               <div className="p-2">
-                <OutfitCollage prendas={cprendas} />
+                <OutfitCollage
+                  prendas={cprendas}
+                  onPrendaTap={(sortedPrendas, idx) => setVisorPrendas({ prendas: sortedPrendas, idx })}
+                />
               </div>
               <div className="px-3 pb-3 space-y-1">
                 <p className="text-xs font-semibold text-foreground leading-tight line-clamp-1">
@@ -338,6 +342,14 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
             )
             setDetalle((prev) => (prev ? { ...prev, nombre } : null))
           }}
+        />
+      )}
+
+      {visorPrendas && (
+        <PrendaViewer
+          prendas={visorPrendas.prendas}
+          initialIdx={visorPrendas.idx}
+          onClose={() => setVisorPrendas(null)}
         />
       )}
     </>

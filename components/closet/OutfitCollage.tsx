@@ -70,7 +70,7 @@ function PrendaCell({
   )
 }
 
-function PrendaViewer({
+export function PrendaViewer({
   prendas,
   initialIdx,
   onClose,
@@ -104,7 +104,7 @@ function PrendaViewer({
   return (
     <div
       className="fixed inset-0 z-100 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={(e) => { e.stopPropagation(); onClose() }}
+      onClick={onClose}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
     >
       <div
@@ -216,12 +216,14 @@ export function OutfitCollage({
   replacingPrendaId,
   pinnedIds,
   onViewPrenda,
+  onPrendaTap,
 }: Readonly<{
   prendas: PrendaConUrl[]
   onRemovePrenda?: (id: string) => void
   replacingPrendaId?: string
   pinnedIds?: string[]
   onViewPrenda?: (prenda: PrendaConUrl) => void
+  onPrendaTap?: (sortedPrendas: PrendaConUrl[], idx: number) => void
 }>) {
   const [viewerIdx, setViewerIdx] = useState<number | null>(null)
 
@@ -239,6 +241,15 @@ export function OutfitCollage({
   const anyReplacing = !!replacingPrendaId
   const pinnedSet = new Set(pinnedIds ?? [])
 
+  function handleTap(p: PrendaConUrl) {
+    const idx = sorted.findIndex((s) => s.id === p.id)
+    if (onPrendaTap) {
+      onPrendaTap(sorted, idx)
+    } else {
+      setViewerIdx(idx)
+    }
+  }
+
   return (
     <>
       <div className="flex gap-1.5 w-full rounded-xl overflow-hidden bg-muted" style={{ aspectRatio: '4/3' }}>
@@ -251,7 +262,7 @@ export function OutfitCollage({
               isReplacing={p.id === replacingPrendaId}
               anyReplacing={anyReplacing}
               isPinned={pinnedSet.has(p.id)}
-              onTap={() => setViewerIdx(sorted.findIndex((s) => s.id === p.id))}
+              onTap={() => handleTap(p)}
             />
           ))}
           {main.length === 0 && <div className="flex-1 bg-muted rounded-lg" />}
@@ -267,7 +278,7 @@ export function OutfitCollage({
                 isReplacing={p.id === replacingPrendaId}
                 anyReplacing={anyReplacing}
                 isPinned={pinnedSet.has(p.id)}
-                onTap={() => setViewerIdx(sorted.findIndex((s) => s.id === p.id))}
+                onTap={() => handleTap(p)}
               />
             ))}
           </div>
