@@ -197,7 +197,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [analysisLabel, setAnalysisLabel] = useState('Procesando...')
-  const [quitarFondo, setQuitarFondo] = useState(true)
+  const [quitarFondo, setQuitarFondo] = useState(false)
   const [badMaskNotice, setBadMaskNotice] = useState<string | null>(null)
 
   // State for the preview/choice step
@@ -533,9 +533,10 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                       <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" aria-hidden="true">
                         <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                       </svg>
-                      <p className="text-xs text-amber-800 leading-relaxed">
-                        El recorte automático puede no ser perfecto, especialmente en prendas claras o fondos complejos. Para mejores resultados, fotografiá la prenda sobre una superficie de un solo color (pared blanca, sábana, etc.).
-                      </p>
+                      <div className="text-xs text-amber-800 leading-relaxed space-y-1.5">
+                        <p>Nuestro recorte automático puede no ser perfecto, especialmente en prendas claras o con fondos complejos.</p>
+                        <p><span className="font-semibold">Consejo:</span> fotografiá sobre una superficie de un solo color, o usá una IA externa como <span className="font-semibold">remove.bg</span> o <span className="font-semibold">Adobe Express</span> para quitar el fondo antes de subir la foto.</p>
+                      </div>
                     </div>
                   )}
                 </div>
