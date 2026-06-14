@@ -51,7 +51,7 @@ async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio:
       const data = imageData.data
       let opaqueCount = 0
       for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] > 60) {
+        if (data[i + 3] > 10) {
           data[i + 3] = 255
           opaqueCount++
         } else {
