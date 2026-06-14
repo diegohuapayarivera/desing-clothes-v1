@@ -31,15 +31,24 @@ export async function POST(request: NextRequest) {
 
   const { prenda_ids, ocasion, clima } = parsed.data
 
-  const { data: prendas, error: fetchError } = await supabase
-    .from('prendas')
-    .select('id, tipo, categoria, color_principal, color_secundario, estilo, estampado')
-    .eq('user_id', user.id)
-    .in('id', prenda_ids)
+  const [{ data: prendas, error: fetchError }, { data: profile }] = await Promise.all([
+    supabase
+      .from('prendas')
+      .select('id, tipo, categoria, color_principal, color_secundario, estilo, estampado')
+      .eq('user_id', user.id)
+      .in('id', prenda_ids),
+    supabase
+      .from('profiles')
+      .select('preferencia_prendas')
+      .eq('id', user.id)
+      .single(),
+  ])
 
   if (fetchError || !prendas || prendas.length !== prenda_ids.length) {
     return NextResponse.json({ error: 'Prendas inválidas' }, { status: 400 })
   }
+
+  const preferencia = (profile as { preferencia_prendas: string | null } | null)?.preferencia_prendas
 
   type PrendaRow = {
     id: string
@@ -65,12 +74,16 @@ export async function POST(request: NextRequest) {
     .filter(Boolean)
     .join('\n')
 
-  const prompt = `Eres una asesora de moda amigable y directa. Analiza este conjunto y da una opinión en 2-3 frases en español:
+  let contextoPerfil: string | null = null
+  if (preferencia === 'hombre') contextoPerfil = 'El usuario es hombre. Orienta las sugerencias a moda masculina.'
+  else if (preferencia === 'mujer') contextoPerfil = 'La usuaria es mujer. Orienta las sugerencias a moda femenina.'
 
+  const prompt = `Eres un asesor de moda amigable y directo. Analiza este conjunto y da una opinión en 2-3 frases en español:
+${contextoPerfil ? `\n${contextoPerfil}\n` : ''}
 Prendas:
 ${desc}${contexto ? `\n\n${contexto}` : ''}
 
-Comenta si las prendas combinan bien, si los colores armonizan y una sugerencia constructiva si aplica. Sé cálida y concisa. Solo la opinión, sin introducción.`
+Comenta si las prendas combinan bien, si los colores armonizan y una sugerencia constructiva si aplica. Sé conciso. Solo la opinión, sin introducción.`
 
   try {
     const message = await anthropic.messages.create({
