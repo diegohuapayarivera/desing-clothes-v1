@@ -548,7 +548,9 @@ export async function POST(request: NextRequest) {
         const r2 = await callClaudeReplace(replacePrompt)
         if (r2 && verify(r2)) replacement = r2
       }
-    } catch {}
+    } catch (err) {
+      console.error('[recomendar] replace — Claude falló:', err)
+    }
 
     // Programmatic fallback
     if (!replacement) {
@@ -585,6 +587,10 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
+
+    if (replacement && validateOutfit(replacement, prendasById, clima) !== null) {
+      replacement = null
     }
 
     if (!replacement) {
@@ -730,7 +736,9 @@ export async function POST(request: NextRequest) {
         const result = ResponseSchema.safeParse(parsed)
         if (result.success) validosBA = filterBA(result.data.outfits)
       }
-    } catch {}
+    } catch (err) {
+      console.error('[recomendar] build_around — Claude falló (1er intento):', err)
+    }
 
     if (validosBA.length < 2) {
       try {
@@ -750,7 +758,9 @@ export async function POST(request: NextRequest) {
             validosBA = deduplicar([...validosBA, ...filterBA(result2.data.outfits)])
           }
         }
-      } catch {}
+      } catch (err) {
+        console.error('[recomendar] build_around — Claude falló (reintento):', err)
+      }
     }
 
     // Programmatic fallback
@@ -899,7 +909,9 @@ export async function POST(request: NextRequest) {
         const retryAvoid = [...(avoid ?? []), ...validos.map((o) => o.prenda_ids)]
         const segunda = await callClaude(prendas, ocasion, clima, personalizacion, retryAvoid, undefined, usadosNote)
         validos = deduplicar([...validos, ...filter(segunda).filter((o) => !isSavedAlready(o))])
-      } catch {}
+      } catch (err) {
+        console.error('[recomendar] full — Claude falló (reintento):', err)
+      }
     }
 
     if (validos.length === 0) {

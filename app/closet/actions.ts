@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
-import type { MotivoFeedback, OutfitUsado } from '@/types'
+import type { Conjunto, MotivoFeedback, OutfitUsado } from '@/types'
 
 // ── Conjuntos ──────────────────────────────────────────────────────────────
 
@@ -13,21 +13,69 @@ export async function saveConjunto(data: {
   ocasion: string
   clima: string | null
   justificacion: string | null
-}): Promise<{ error?: string }> {
+  origen?: 'ia' | 'manual'
+}): Promise<{ error?: string; conjunto?: Conjunto }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
-  const { error } = await supabase.from('conjuntos').insert({
-    user_id: user.id,
-    prenda_ids: data.prenda_ids,
-    ocasion: data.ocasion,
-    clima: data.clima,
-    justificacion: data.justificacion,
-    origen: 'ia',
-  })
+  const { count } = await supabase
+    .from('prendas')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .in('id', data.prenda_ids)
+  if (count !== data.prenda_ids.length) return { error: 'Prendas inválidas' }
+  const { data: inserted, error } = await supabase
+    .from('conjuntos')
+    .insert({
+      user_id: user.id,
+      prenda_ids: data.prenda_ids,
+      ocasion: data.ocasion,
+      clima: data.clima,
+      justificacion: data.justificacion,
+      origen: data.origen ?? 'ia',
+    })
+    .select()
+    .single()
   if (error) return { error: 'Error al guardar el conjunto' }
   revalidatePath('/conjuntos')
-  return {}
+  return { conjunto: inserted as Conjunto }
+}
+
+export async function updateConjunto(
+  id: string,
+  data: {
+    prenda_ids: string[]
+    ocasion: string
+    clima: string | null
+    nombre: string | null
+  },
+): Promise<{ error?: string; conjunto?: Conjunto }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+  if (data.prenda_ids.length > 0) {
+    const { count } = await supabase
+      .from('prendas')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .in('id', data.prenda_ids)
+    if (count !== data.prenda_ids.length) return { error: 'Prendas inválidas' }
+  }
+  const { data: updated, error } = await supabase
+    .from('conjuntos')
+    .update({
+      prenda_ids: data.prenda_ids,
+      ocasion: data.ocasion,
+      clima: data.clima,
+      nombre: data.nombre,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single()
+  if (error) return { error: 'Error al actualizar el conjunto' }
+  revalidatePath('/conjuntos')
+  return { conjunto: updated as Conjunto }
 }
 
 export async function renameConjunto(id: string, nombre: string): Promise<{ error?: string }> {
@@ -54,6 +102,7 @@ export async function deleteConjunto(id: string): Promise<{ error?: string }> {
     .eq('id', id)
     .eq('user_id', user.id)
   if (error) return { error: 'Error al eliminar' }
+  revalidatePath('/conjuntos')
   return {}
 }
 

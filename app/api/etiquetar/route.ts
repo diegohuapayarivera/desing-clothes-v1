@@ -89,6 +89,9 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: 'Imagen requerida' }, { status: 400 })
     }
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'La imagen no puede superar los 10 MB' }, { status: 413 })
+    }
     const buffer = await file.arrayBuffer()
     imageBytes = new Uint8Array(buffer)
     mimeType =

@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Layers, X, Plus, Search } from 'lucide-react'
+import { Sparkles, Layers, X, Plus, Search, SquarePen } from 'lucide-react'
 import { PrendaDetalle } from './PrendaDetalle'
 import { AgregarPrendaModal } from './AgregarPrendaModal'
 import { RecomendarModal } from './RecomendarModal'
 import { CombinarModal } from './CombinarModal'
+import { ArmarConjuntoModal } from './ArmarConjuntoModal'
 import { CATEGORIAS, COLORES, CATEGORIA_LABELS, colorBgStyle } from '@/lib/taxonomia'
 import { CATEGORIA_ICONS } from '@/lib/icons'
 import { validarCompatibilidadFijas } from '@/lib/recomendador'
@@ -40,6 +41,7 @@ export function ClosetView({
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set())
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null)
   const [showCombinar, setShowCombinar] = useState<PrendaConUrl[] | null>(null)
+  const [showArmar, setShowArmar] = useState(false)
 
   function toggleCat(cat: Categoria) {
     setFiltroCats((prev) => {
@@ -132,6 +134,14 @@ export function ClosetView({
           >
             <Layers className="w-4 h-4" aria-hidden="true" />
             Combinar prendas
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowArmar(true)}
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
+          >
+            <SquarePen className="w-4 h-4" aria-hidden="true" />
+            Armar conjunto
           </button>
           <button
             type="button"
@@ -307,6 +317,14 @@ export function ClosetView({
             setShowCombinar(null)
             salirModoSeleccion()
           }}
+        />
+      )}
+
+      {showArmar && (
+        <ArmarConjuntoModal
+          prendas={prendas}
+          onClose={() => setShowArmar(false)}
+          onSaved={() => setShowArmar(false)}
         />
       )}
 

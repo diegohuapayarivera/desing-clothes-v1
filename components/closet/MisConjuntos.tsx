@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { X, Shirt, Pencil, Trash2, Layers } from 'lucide-react'
+import { X, Shirt, Pencil, Trash2, Layers, Plus } from 'lucide-react'
 import { OutfitCollage, PrendaViewer } from './OutfitCollage'
+import { ArmarConjuntoModal } from './ArmarConjuntoModal'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -19,6 +20,7 @@ function ConjuntoDetalle({
   onClose,
   onDeleted,
   onRenamed,
+  onEdit,
   onPrendaTap,
 }: Readonly<{
   conjunto: Conjunto
@@ -26,6 +28,7 @@ function ConjuntoDetalle({
   onClose: () => void
   onDeleted: () => void
   onRenamed: (nombre: string) => void
+  onEdit: () => void
   onPrendaTap: (sortedPrendas: PrendaConUrl[], idx: number) => void
 }>) {
   const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting' | 'meLoPuse'>('view')
@@ -200,6 +203,14 @@ function ConjuntoDetalle({
                 <Shirt className="w-4 h-4" />
                 Me lo puse
               </button>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-border text-foreground/70 text-sm font-medium hover:bg-muted transition-all active:scale-95"
+              >
+                <Pencil className="w-4 h-4" />
+                Editar prendas
+              </button>
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -264,6 +275,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
   const [conjuntos, setConjuntos] = useState(initialConjuntos)
   const [detalle, setDetalle] = useState<Conjunto | null>(null)
   const [visorPrendas, setVisorPrendas] = useState<{ prendas: PrendaConUrl[]; idx: number } | null>(null)
+  const [showArmar, setShowArmar] = useState<{ mode: 'create' } | { mode: 'edit'; conjunto: Conjunto } | null>(null)
 
   const prendasById = new Map(prendasConUrl.map((p) => [p.id, p]))
 
@@ -275,22 +287,61 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
 
   if (conjuntos.length === 0) {
     return (
-      <div className="flex flex-col items-center text-center py-16 px-6">
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Layers className="w-8 h-8 text-muted-foreground/50" />
+      <>
+        <div className="flex flex-col items-center text-center py-16 px-6">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Layers className="w-8 h-8 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-lg font-light text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+            Sin conjuntos guardados
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
+            Pide una recomendación o arma uno manualmente desde tu clóset.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowArmar({ mode: 'create' })}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4" />
+            Armar conjunto
+          </button>
         </div>
-        <h3 className="text-lg font-light text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-          Sin conjuntos guardados
-        </h3>
-        <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-          Pide una recomendación y guarda los looks que más te gusten.
-        </p>
-      </div>
+
+        {showArmar && (
+          <ArmarConjuntoModal
+            prendas={prendasConUrl}
+            conjuntoInicial={showArmar.mode === 'edit' ? showArmar.conjunto : undefined}
+            onClose={() => setShowArmar(null)}
+            onSaved={(conjunto) => {
+              setConjuntos((prev) =>
+                showArmar.mode === 'edit'
+                  ? prev.map((c) => (c.id === conjunto.id ? conjunto : c))
+                  : [conjunto, ...prev],
+              )
+              setShowArmar(null)
+            }}
+          />
+        )}
+      </>
     )
   }
 
   return (
     <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-muted-foreground">
+          {conjuntos.length} {conjuntos.length === 1 ? 'conjunto' : 'conjuntos'}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowArmar({ mode: 'create' })}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all active:scale-95"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Crear conjunto
+        </button>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {conjuntos.map((c) => {
           const cprendas = getPrendasDeConjunto(c)
@@ -344,6 +395,11 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
             )
             setDetalle((prev) => (prev ? { ...prev, nombre } : null))
           }}
+          onEdit={() => {
+            const c = detalle
+            setDetalle(null)
+            setShowArmar({ mode: 'edit', conjunto: c })
+          }}
           onPrendaTap={(sorted, idx) => setVisorPrendas({ prendas: sorted, idx })}
         />
       )}
@@ -353,6 +409,22 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
           prendas={visorPrendas.prendas}
           initialIdx={visorPrendas.idx}
           onClose={() => setVisorPrendas(null)}
+        />
+      )}
+
+      {showArmar && (
+        <ArmarConjuntoModal
+          prendas={prendasConUrl}
+          conjuntoInicial={showArmar.mode === 'edit' ? showArmar.conjunto : undefined}
+          onClose={() => setShowArmar(null)}
+          onSaved={(conjunto) => {
+            setConjuntos((prev) =>
+              showArmar.mode === 'edit'
+                ? prev.map((c) => (c.id === conjunto.id ? conjunto : c))
+                : [conjunto, ...prev],
+            )
+            setShowArmar(null)
+          }}
         />
       )}
     </>
