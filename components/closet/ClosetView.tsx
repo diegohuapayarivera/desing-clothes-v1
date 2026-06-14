@@ -42,6 +42,7 @@ export function ClosetView({
   const [errorSeleccion, setErrorSeleccion] = useState<string | null>(null)
   const [showCombinar, setShowCombinar] = useState<PrendaConUrl[] | null>(null)
   const [showArmar, setShowArmar] = useState(false)
+  const [showCrearOpciones, setShowCrearOpciones] = useState(false)
 
   function toggleCat(cat: Categoria) {
     setFiltroCats((prev) => {
@@ -117,41 +118,46 @@ export function ClosetView({
       )}
 
       {!modoSeleccion && (
-        <div className="flex flex-col md:flex-row gap-2 mb-6">
+        <div className="flex flex-col gap-2 mb-6">
           <button
             type="button"
             onClick={() => setShowRecomendar(true)}
-            className="w-full md:flex-1 flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm"
+            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm"
             aria-label="Recibir recomendación de outfit"
           >
             <Sparkles className="w-4 h-4" aria-hidden="true" />
             ¿Qué me pongo hoy?
           </button>
-          <button
-            type="button"
-            onClick={() => setModoSeleccion(true)}
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
-          >
-            <Layers className="w-4 h-4" aria-hidden="true" />
-            Combinar prendas
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowArmar(true)}
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
-          >
-            <SquarePen className="w-4 h-4" aria-hidden="true" />
-            Armar conjunto
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAgregar(true)}
-            className="w-full md:w-auto flex items-center justify-center gap-2 px-5 py-4 rounded-xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-95"
-            aria-label="Agregar prenda"
-          >
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            Agregar prenda
-          </button>
+
+          {showCrearOpciones ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setModoSeleccion(true); setShowCrearOpciones(false) }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-xs font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
+              >
+                <Layers className="w-3.5 h-3.5" aria-hidden="true" />
+                Combinar una prenda
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowArmar(true); setShowCrearOpciones(false) }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-xs font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
+              >
+                <SquarePen className="w-3.5 h-3.5" aria-hidden="true" />
+                Armar desde cero
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCrearOpciones(true)}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border-2 border-dashed border-primary/40 text-sm font-medium text-primary hover:bg-primary/5 transition-all active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              Crear conjunto
+            </button>
+          )}
         </div>
       )}
 
@@ -210,15 +216,26 @@ export function ClosetView({
               {filtradas.length === 1 ? 'prenda' : 'prendas'}
               {hayFiltros ? ' filtradas' : ' en total'}
             </p>
-            {hayFiltros && (
+            <div className="flex items-center gap-3">
+              {hayFiltros && (
+                <button
+                  type="button"
+                  onClick={() => { setFiltroCats(new Set()); setFiltroColores(new Set()) }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Limpiar filtros
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => { setFiltroCats(new Set()); setFiltroColores(new Set()) }}
-                className="text-xs text-primary hover:underline"
+                onClick={() => setShowAgregar(true)}
+                className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                aria-label="Agregar prenda"
               >
-                Limpiar filtros
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                Agregar
               </button>
-            )}
+            </div>
           </div>
         </div>
       )}
