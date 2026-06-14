@@ -118,7 +118,7 @@ export function ClosetView({
       )}
 
       {!modoSeleccion && (
-        <div className="flex flex-col gap-2 mb-6">
+        <div className="flex flex-col gap-2 mb-6 lg:max-w-xl">
           <button
             type="button"
             onClick={() => setShowRecomendar(true)}
@@ -407,7 +407,7 @@ function PrendaCard({
         )}
       </div>
 
-      <div className="px-3 py-2.5">
+      <div className="px-3 py-2.5 lg:px-2 lg:py-2">
         <p className="text-xs font-semibold text-foreground capitalize leading-tight mb-1.5">
           {prenda.tipo.replaceAll('_', ' ')}
         </p>
