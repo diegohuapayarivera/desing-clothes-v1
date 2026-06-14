@@ -40,6 +40,7 @@ export async function renameConjunto(id: string, nombre: string): Promise<{ erro
     .eq('id', id)
     .eq('user_id', user.id)
   if (error) return { error: 'Error al renombrar' }
+  revalidatePath('/conjuntos')
   return {}
 }
 
@@ -87,6 +88,54 @@ export async function deleteFotoHuerfana(foto_path: string): Promise<void> {
   // Only allow deleting from the user's own folder
   if (!foto_path.startsWith(`${user.id}/`)) return
   await supabase.storage.from('prendas-fotos').remove([foto_path])
+}
+
+/**
+ * Deletes Storage files that have no matching row in `prendas` and are older than 24h.
+ * These orphans arise when the tab is closed or the network drops after upload but before save.
+ *
+ * How to trigger: call from a protected admin page or a one-off script:
+ *   import { limpiarFotosHuerfanas } from '@/app/closet/actions'
+ *   const { deleted } = await limpiarFotosHuerfanas()
+ * Only deletes files belonging to the authenticated user.
+ */
+export async function limpiarFotosHuerfanas(): Promise<{ deleted: number; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { deleted: 0, error: 'No autorizado' }
+
+  const { data: files, error: listError } = await supabase.storage
+    .from('prendas-fotos')
+    .list(user.id, { limit: 1000 })
+
+  if (listError || !files) return { deleted: 0, error: 'Error al listar archivos' }
+
+  const { data: prendas } = await supabase
+    .from('prendas')
+    .select('foto_path')
+    .eq('user_id', user.id)
+
+  const knownPaths = new Set((prendas ?? []).map((p: { foto_path: string }) => p.foto_path))
+
+  const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  const orphans = files
+    .filter((f) => {
+      const fullPath = `${user.id}/${f.name}`
+      if (knownPaths.has(fullPath)) return false
+      const created = f.created_at ? new Date(f.created_at) : null
+      return created !== null && created < threshold
+    })
+    .map((f) => `${user.id}/${f.name}`)
+
+  if (orphans.length === 0) return { deleted: 0 }
+
+  const { error: removeError } = await supabase.storage
+    .from('prendas-fotos')
+    .remove(orphans)
+
+  if (removeError) return { deleted: 0, error: 'Error al eliminar archivos huérfanos' }
+  return { deleted: orphans.length }
 }
 
 // ── Geo ────────────────────────────────────────────────────────────────────

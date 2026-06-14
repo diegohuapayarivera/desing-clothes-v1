@@ -13,6 +13,7 @@ import {
   normalizarColor,
   normalizarTemporada,
 } from '@/lib/taxonomia'
+import { extractText } from '@/lib/anthropic'
 
 const TagsSchema = z.object({
   categoria: z.enum(CATEGORIAS),
@@ -179,7 +180,7 @@ Responde con este JSON exacto:
       ],
     })
 
-    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+    const text = extractText(message.content)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>

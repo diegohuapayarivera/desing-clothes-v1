@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { extractText } from '@/lib/anthropic'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -283,7 +284,7 @@ async function callClaude(
     messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote) }],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+  const text = extractText(message.content)
   const jsonMatch = /\{[\s\S]*\}/.exec(text)
   if (!jsonMatch) throw new Error('No JSON in response')
 
@@ -303,7 +304,7 @@ async function callClaudeReplace(
     messages: [{ role: 'user', content: prompt }],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+  const text = extractText(message.content)
   const jsonMatch = /\{[\s\S]*\}/.exec(text)
   if (!jsonMatch) return null
 
@@ -443,7 +444,7 @@ export async function POST(request: NextRequest) {
 
     const { data: prendaRows } = await supabase
       .from('prendas')
-      .select('*')
+      .select('id, tipo, categoria, color_principal, color_secundario, estilo, estampado, temporada')
       .eq('user_id', user.id)
     const allPrendas = (prendaRows ?? []) as Prenda[]
 
@@ -604,7 +605,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Datos inválidos para modo build_around' }, { status: 400 })
     }
 
-    const { data: prendaRows } = await supabase.from('prendas').select('*').eq('user_id', user.id)
+    const { data: prendaRows } = await supabase.from('prendas').select('id, tipo, categoria, color_principal, color_secundario, estilo, estampado, temporada').eq('user_id', user.id)
     const allPrendas = (prendaRows ?? []) as Prenda[]
 
     const fijasPrendas = prendas_fijas.map((id) => allPrendas.find((p) => p.id === id))
@@ -722,7 +723,7 @@ export async function POST(request: NextRequest) {
         max_tokens: 1024,
         messages: [{ role: 'user', content: bPrompt }],
       })
-      const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+      const text = extractText(message.content)
       const jsonMatch = /\{[\s\S]*\}/.exec(text)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
@@ -740,7 +741,7 @@ export async function POST(request: NextRequest) {
           max_tokens: 1024,
           messages: [{ role: 'user', content: bPrompt2 }],
         })
-        const text2 = message2.content[0].type === 'text' ? message2.content[0].text.trim() : ''
+        const text2 = extractText(message2.content)
         const jsonMatch2 = /\{[\s\S]*\}/.exec(text2)
         if (jsonMatch2) {
           const parsed2 = JSON.parse(jsonMatch2[0])
@@ -811,7 +812,7 @@ export async function POST(request: NextRequest) {
 
   const { data: prendaRows } = await supabase
     .from('prendas')
-    .select('*')
+    .select('id, tipo, categoria, color_principal, color_secundario, estilo, estampado, temporada')
     .eq('user_id', user.id)
   const allPrendas = (prendaRows ?? []) as Prenda[]
 
