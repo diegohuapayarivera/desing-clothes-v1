@@ -6,6 +6,8 @@ import { extractText } from '@/lib/anthropic'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const OPINAR_MODEL = 'claude-haiku-4-5-20251001'
+
 const RequestSchema = z.object({
   prenda_ids: z.array(z.string()).min(1).max(20),
   ocasion: z.string().optional(),
@@ -87,7 +89,7 @@ Comenta si las prendas combinan bien, si los colores armonizan y una sugerencia 
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: OPINAR_MODEL,
       max_tokens: 200,
       messages: [{ role: 'user', content: prompt }],
     })
