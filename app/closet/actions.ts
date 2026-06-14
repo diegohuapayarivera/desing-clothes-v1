@@ -336,43 +336,33 @@ export async function registrarOutfitUsado(data: {
   conjunto_id?: string | null
   fecha: string
   ocasion?: string | null
-  force?: boolean
-}): Promise<{ error?: string; alreadyExists?: OutfitUsado }> {
+  estado?: 'planeado' | 'usado'
+}): Promise<{ error?: string; id?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
 
-  if (!data.force) {
-    const { data: existing } = await supabase
-      .from('outfits_usados')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('fecha', data.fecha)
-      .maybeSingle()
-    if (existing) return { alreadyExists: existing as OutfitUsado }
-  }
-
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('outfits_usados')
-    .upsert(
-      {
-        user_id: user.id,
-        prenda_ids: data.prenda_ids,
-        conjunto_id: data.conjunto_id ?? null,
-        fecha: data.fecha,
-        ocasion: data.ocasion ?? null,
-      },
-      { onConflict: 'user_id,fecha' },
-    )
+    .insert({
+      user_id: user.id,
+      prenda_ids: data.prenda_ids,
+      conjunto_id: data.conjunto_id ?? null,
+      fecha: data.fecha,
+      ocasion: data.ocasion ?? null,
+      estado: data.estado ?? 'usado',
+    })
+    .select('id')
+    .single()
 
   if (error) return { error: 'Error al registrar el outfit' }
   revalidatePath('/calendario')
-  return {}
+  return { id: inserted.id }
 }
 
 export async function updateOutfitUsado(
   id: string,
-  updates: { prenda_ids?: string[]; fecha?: string; ocasion?: string | null },
+  updates: { prenda_ids?: string[]; fecha?: string; ocasion?: string | null; estado?: 'planeado' | 'usado' },
 ): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -435,6 +425,7 @@ export async function fetchOutfitsUsadosRango(desde: string, hasta: string): Pro
     .from('outfits_usados')
     .select('*')
     .eq('user_id', user.id)
+    .eq('estado', 'usado')
     .gte('fecha', desde)
     .lte('fecha', hasta)
     .order('fecha', { ascending: false })

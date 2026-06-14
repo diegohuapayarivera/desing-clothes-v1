@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { X, Shirt, Pencil, Trash2, Layers, Plus } from 'lucide-react'
+import { X, Shirt, Pencil, Trash2, Layers, Plus, CalendarPlus } from 'lucide-react'
 import { OutfitCollage, PrendaViewer } from './OutfitCollage'
 import { ArmarConjuntoModal } from './ArmarConjuntoModal'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
@@ -31,16 +31,23 @@ function ConjuntoDetalle({
   onEdit: () => void
   onPrendaTap: (sortedPrendas: PrendaConUrl[], idx: number) => void
 }>) {
-  const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting' | 'meLoPuse'>('view')
+  const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting' | 'meLoPuse' | 'planificar'>('view')
   const [nombreInput, setNombreInput] = useState(conjunto.nombre ?? '')
   const [, startTransition] = useTransition()
 
   const today = new Date().toISOString().split('T')[0]
   const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })()
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()
+
   const [fechaMeLoPuse, setFechaMeLoPuse] = useState(today)
   const [registrado, setRegistrado] = useState(false)
   const [savingRegistro, setSavingRegistro] = useState(false)
   const [errorRegistro, setErrorRegistro] = useState<string | null>(null)
+
+  const [fechaPlanificacion, setFechaPlanificacion] = useState(tomorrow)
+  const [planificado, setPlanificado] = useState(false)
+  const [savingPlanificacion, setSavingPlanificacion] = useState(false)
+  const [errorPlanificacion, setErrorPlanificacion] = useState<string | null>(null)
 
   async function handleMeLoPuse() {
     setSavingRegistro(true)
@@ -50,11 +57,27 @@ function ConjuntoDetalle({
       conjunto_id: conjunto.id,
       fecha: fechaMeLoPuse,
       ocasion: conjunto.ocasion,
-      force: true,
+      estado: 'usado',
     })
     setSavingRegistro(false)
     if (result.error) { setErrorRegistro('No se pudo registrar. Intenta de nuevo.'); return }
     setRegistrado(true)
+    setMode('view')
+  }
+
+  async function handlePlanificar() {
+    setSavingPlanificacion(true)
+    setErrorPlanificacion(null)
+    const result = await registrarOutfitUsado({
+      prenda_ids: conjunto.prenda_ids,
+      conjunto_id: conjunto.id,
+      fecha: fechaPlanificacion,
+      ocasion: conjunto.ocasion,
+      estado: 'planeado',
+    })
+    setSavingPlanificacion(false)
+    if (result.error) { setErrorPlanificacion('No se pudo planificar. Intenta de nuevo.'); return }
+    setPlanificado(true)
     setMode('view')
   }
 
@@ -195,6 +218,9 @@ function ConjuntoDetalle({
               {registrado && (
                 <p className="text-xs text-center text-emerald-600">✓ Registrado el {fechaMeLoPuse}</p>
               )}
+              {planificado && (
+                <p className="text-xs text-center text-amber-600">✓ Planificado para el {fechaPlanificacion}</p>
+              )}
               <button
                 type="button"
                 onClick={() => setMode('meLoPuse')}
@@ -202,6 +228,14 @@ function ConjuntoDetalle({
               >
                 <Shirt className="w-4 h-4" />
                 Me lo puse
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('planificar')}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-border text-foreground/70 text-sm font-medium hover:bg-muted transition-all active:scale-95"
+              >
+                <CalendarPlus className="w-4 h-4" />
+                Planificar para un día
               </button>
               <button
                 type="button"
@@ -261,6 +295,39 @@ function ConjuntoDetalle({
                   className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
                 >
                   {savingRegistro ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'planificar' && (
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-muted-foreground">¿Para qué día lo planificas?</p>
+              <input
+                type="date"
+                value={fechaPlanificacion}
+                min={today}
+                onChange={(e) => setFechaPlanificacion(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-border bg-background"
+              />
+              {errorPlanificacion && (
+                <p className="text-xs text-destructive">{errorPlanificacion}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode('view')}
+                  className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePlanificar}
+                  disabled={savingPlanificacion}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                >
+                  {savingPlanificacion ? 'Guardando...' : 'Planificar'}
                 </button>
               </div>
             </div>

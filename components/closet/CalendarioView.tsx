@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useTransition } from 'react'
-import { X, Pencil, Trash2, Heart, Shirt, CalendarDays, ChartNoAxesColumn, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Heart, Shirt, CalendarDays, ChartNoAxesColumn, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { OutfitCollage } from './OutfitCollage'
 import {
   registrarOutfitUsado,
@@ -42,14 +42,18 @@ function sixtyDaysAgoStr(): string {
   return d.toISOString().split('T')[0]
 }
 
-function buildMap(list: OutfitUsado[]): Map<string, OutfitUsado> {
-  return new Map(list.map((o) => [o.fecha, o]))
+function buildMapMulti(list: OutfitUsado[]): Map<string, OutfitUsado[]> {
+  const map = new Map<string, OutfitUsado[]>()
+  for (const o of list) {
+    const arr = map.get(o.fecha) ?? []
+    arr.push(o)
+    map.set(o.fecha, arr)
+  }
+  return map
 }
 
-/** Returns 42 date strings (or null for padding cells), week starts Monday */
 function getCalendarCells(year: number, month: number): (string | null)[] {
   const firstDay = new Date(year, month, 1)
-  // getDay(): 0=Sun, 1=Mon … 6=Sat → convert to Mon=0 … Sun=6
   const startPad = (firstDay.getDay() + 6) % 7
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: (string | null)[] = []
@@ -81,7 +85,6 @@ function formatFechaLarga(fecha: string): string {
 // ── Stats helpers ──────────────────────────────────────────────────────────
 
 interface EstadisticasState {
-  rachaDias: number
   prendaMasUsada: { prenda: PrendaConUrl; count: number } | null
   prendasOlvidadas: PrendaConUrl[]
 }
@@ -91,18 +94,6 @@ function calcEstadisticas(
   prendasById: Map<string, PrendaConUrl>,
   allPrendas: PrendaConUrl[],
 ): EstadisticasState {
-  const today = todayStr()
-
-  // Racha: días consecutivos hacia atrás desde hoy
-  const dateSet = new Set(outfits.map((o) => o.fecha))
-  let racha = 0
-  const cur = new Date(today)
-  while (dateSet.has(cur.toISOString().split('T')[0])) {
-    racha++
-    cur.setDate(cur.getDate() - 1)
-  }
-
-  // Prenda más usada (últimos 30 días)
   const thirtyAgo = thirtyDaysAgoStr()
   const recentOutfits = outfits.filter((o) => o.fecha >= thirtyAgo)
   const counts = new Map<string, number>()
@@ -120,13 +111,10 @@ function calcEstadisticas(
     ? { prenda: prendasById.get(topId)!, count: topCount }
     : null
 
-  // Prendas olvidadas (no usadas en últimos 60 días)
   const usedIds = new Set(outfits.flatMap((o) => o.prenda_ids))
-  const prendasOlvidadas = allPrendas
-    .filter((p) => !usedIds.has(p.id))
-    .slice(0, 5)
+  const prendasOlvidadas = allPrendas.filter((p) => !usedIds.has(p.id)).slice(0, 5)
 
-  return { rachaDias: racha, prendaMasUsada, prendasOlvidadas }
+  return { prendaMasUsada, prendasOlvidadas }
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -134,25 +122,15 @@ function calcEstadisticas(
 export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear, initialMonth }: Readonly<Props>) {
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
-  const [outfits, setOutfits] = useState<Map<string, OutfitUsado>>(() => buildMap(outfitsUsados))
+  const [outfits, setOutfits] = useState<Map<string, OutfitUsado[]>>(() => buildMapMulti(outfitsUsados))
   const [subView, setSubView] = useState<'cal' | 'stats'>('cal')
   const [selectedDia, setSelectedDia] = useState<string | null>(null)
   const [registrando, setRegistrando] = useState<string | null>(null)
-  // pendingRegData is kept to replay the registration after confirm-replace
-  const pendingRegData = useRef<{
-    prenda_ids: string[]
-    conjunto_id?: string | null
-    ocasion?: string | null
-    fecha: string
-  } | null>(null)
-  const [confirmReplace, setConfirmReplace] = useState<{ fecha: string; existing: OutfitUsado } | null>(null)
   const [estadisticas, setEstadisticas] = useState<EstadisticasState | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Swipe tracking
   const touchStartX = useRef<number | null>(null)
-
   const prendasById = useMemo(() => new Map(prendas.map((p) => [p.id, p])), [prendas])
   const cells = useMemo(() => getCalendarCells(year, month), [year, month])
   const today = todayStr()
@@ -163,7 +141,7 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
     if (nm > 11) { ny++; nm = 0 }
     startTransition(async () => {
       const data = await fetchOutfitsUsadosMes(ny, nm)
-      setOutfits(buildMap(data))
+      setOutfits(buildMapMulti(data))
       setYear(ny)
       setMonth(nm)
     })
@@ -187,54 +165,58 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
     conjunto_id?: string | null
     fecha: string
     ocasion?: string | null
+    estado: 'planeado' | 'usado'
   }) {
-    pendingRegData.current = data
-    const result = await registrarOutfitUsado({ ...data, force: false })
-    if (result.alreadyExists) {
-      setRegistrando(null)
-      setConfirmReplace({ fecha: data.fecha, existing: result.alreadyExists })
-      return
-    }
+    const result = await registrarOutfitUsado(data)
     if (!result.error) {
-      const fakeNew: OutfitUsado = {
-        id: crypto.randomUUID(),
+      const newOutfit: OutfitUsado = {
+        id: result.id ?? crypto.randomUUID(),
         user_id: '',
         prenda_ids: data.prenda_ids,
         conjunto_id: data.conjunto_id ?? null,
         fecha: data.fecha,
         ocasion: data.ocasion ?? null,
+        estado: data.estado,
         created_at: new Date().toISOString(),
       }
-      setOutfits((prev) => new Map(prev).set(data.fecha, fakeNew))
+      setOutfits((prev) => {
+        const next = new Map(prev)
+        next.set(data.fecha, [...(next.get(data.fecha) ?? []), newOutfit])
+        return next
+      })
       setRegistrando(null)
     }
   }
 
-  async function handleForceRegistrar() {
-    const data = pendingRegData.current
-    if (!data) return
-    const result = await registrarOutfitUsado({ ...data, force: true })
-    if (!result.error) {
-      const fakeNew: OutfitUsado = {
-        id: crypto.randomUUID(),
-        user_id: '',
-        prenda_ids: data.prenda_ids,
-        conjunto_id: data.conjunto_id ?? null,
-        fecha: data.fecha,
-        ocasion: data.ocasion ?? null,
-        created_at: new Date().toISOString(),
-      }
-      setOutfits((prev) => new Map(prev).set(data.fecha, fakeNew))
+  async function handleToggleEstado(id: string, fecha: string, newEstado: 'planeado' | 'usado') {
+    const res = await updateOutfitUsado(id, { estado: newEstado })
+    if (!res.error) {
+      setOutfits((prev) => {
+        const next = new Map(prev)
+        const arr = (next.get(fecha) ?? []).map((o) => o.id === id ? { ...o, estado: newEstado } : o)
+        next.set(fecha, arr)
+        return next
+      })
     }
-    pendingRegData.current = null
-    setConfirmReplace(null)
+  }
+
+  async function handleDeleteOutfit(id: string, fecha: string) {
+    const res = await deleteOutfitUsado(id)
+    if (!res.error) {
+      setOutfits((prev) => {
+        const next = new Map(prev)
+        const arr = (next.get(fecha) ?? []).filter((o) => o.id !== id)
+        if (arr.length === 0) next.delete(fecha)
+        else next.set(fecha, arr)
+        return next
+      })
+    }
   }
 
   async function loadStats() {
     if (estadisticas || loadingStats) return
     setLoadingStats(true)
-    const desde = sixtyDaysAgoStr()
-    const data = await fetchOutfitsUsadosRango(desde, today)
+    const data = await fetchOutfitsUsadosRango(sixtyDaysAgoStr(), today)
     setEstadisticas(calcEstadisticas(data, prendasById, prendas))
     setLoadingStats(false)
   }
@@ -243,8 +225,6 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
     setSubView(v)
     if (v === 'stats') loadStats()
   }
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
@@ -321,106 +301,108 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
               if (!fecha) {
                 return <div key={`pad-${idx}`} className="min-h-[3rem]" />
               }
-              const outfit = outfits.get(fecha)
+
+              const dayOutfits = outfits.get(fecha) ?? []
+              const count = dayOutfits.length
               const isToday = fecha === today
               const isFuture = fecha > today
               const dayNum = parseInt(fecha.split('-')[2], 10)
 
-              // Thumbnail: first cuerpo_completo or superior prenda
               let thumbUrl: string | null = null
-              if (outfit) {
-                const CAT_PRIO = ['cuerpo_completo', 'superior']
-                for (const cat of CAT_PRIO) {
-                  const pid = outfit.prenda_ids.find(
-                    (id) => prendasById.get(id)?.categoria === cat,
-                  )
+              if (count > 0) {
+                const first = dayOutfits[0]
+                for (const cat of ['cuerpo_completo', 'superior']) {
+                  const pid = first.prenda_ids.find((id) => prendasById.get(id)?.categoria === cat)
                   if (pid) { thumbUrl = prendasById.get(pid)?.signedUrl ?? null; break }
                 }
-                if (!thumbUrl && outfit.prenda_ids.length > 0) {
-                  thumbUrl = prendasById.get(outfit.prenda_ids[0])?.signedUrl ?? null
+                if (!thumbUrl && first.prenda_ids.length > 0) {
+                  thumbUrl = prendasById.get(first.prenda_ids[0])?.signedUrl ?? null
                 }
               }
+
+              const tieneUsado = dayOutfits.some((o) => o.estado === 'usado')
+              const tieneSoloPlaneado = count > 0 && !tieneUsado
 
               return (
                 <button
                   key={fecha}
-                  disabled={isFuture}
                   onClick={() => {
-                    if (outfit) setSelectedDia(fecha)
-                    else if (!isFuture) setRegistrando(fecha)
+                    if (count > 0) setSelectedDia(fecha)
+                    else setRegistrando(fecha)
                   }}
-                  className={`min-h-[3rem] lg:min-h-[5rem] rounded-lg flex flex-col items-center justify-start pt-1 gap-0.5 transition-colors cursor-pointer
-                    ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}
-                    ${isFuture ? 'opacity-30 cursor-not-allowed' : 'hover:bg-muted'}
-                    ${outfit ? 'bg-primary/5' : ''}
-                  `}
+                  className={[
+                    'min-h-12 lg:min-h-20 rounded-lg flex flex-col items-center justify-start pt-1 gap-0.5 transition-colors cursor-pointer relative',
+                    isToday ? 'ring-2 ring-primary ring-offset-1' : '',
+                    tieneUsado ? 'bg-primary/5' : '',
+                    tieneSoloPlaneado ? 'bg-amber-50 dark:bg-amber-950/20' : '',
+                    count === 0 && isFuture ? 'opacity-40 hover:opacity-70' : 'hover:bg-muted',
+                  ].filter(Boolean).join(' ')}
                 >
                   <span className={`text-xs font-medium leading-none ${isToday ? 'text-primary' : 'text-foreground'}`}>
                     {dayNum}
                   </span>
-                  {thumbUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={thumbUrl}
-                      alt=""
-                      className="w-6 h-6 lg:w-10 lg:h-10 rounded-md object-cover"
-                    />
-                  )}
-                  {outfit && !thumbUrl && (
-                    <div className="w-2 h-2 rounded-full bg-primary/60" />
-                  )}
+                  {thumbUrl ? (
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={thumbUrl}
+                        alt=""
+                        className={`w-6 h-6 lg:w-10 lg:h-10 rounded-md object-cover ${tieneSoloPlaneado ? 'opacity-60' : ''}`}
+                      />
+                      {count > 1 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center leading-none">
+                          {count}
+                        </span>
+                      )}
+                    </div>
+                  ) : count > 0 ? (
+                    <div className={`w-2 h-2 rounded-full ${tieneSoloPlaneado ? 'bg-amber-400 border border-amber-500 border-dashed' : 'bg-primary/60'}`} />
+                  ) : null}
                 </button>
               )
             })}
           </div>
 
-          {/* Empty state */}
+          {/* Legend */}
+          <div className="flex gap-4 justify-center pt-1">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary/60" />
+              Usado
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              Planeado
+            </span>
+          </div>
+
           {outfits.size === 0 && (
             <p className="text-center text-sm text-muted-foreground py-4">
-              Sin registros este mes — toca un día para agregar un outfit.
+              Sin registros este mes — toca cualquier día para agregar un outfit.
             </p>
           )}
         </>
       )}
 
       {subView === 'stats' && (
-        <EstadisticasSection
-          estadisticas={estadisticas}
-          loading={loadingStats}
-        />
+        <EstadisticasSection estadisticas={estadisticas} loading={loadingStats} />
       )}
 
-      {/* Día detalle (bottom sheet) */}
       {selectedDia && (
         <DiaDetalle
           fecha={selectedDia}
-          outfit={outfits.get(selectedDia)!}
+          outfits={outfits.get(selectedDia) ?? []}
           prendasById={prendasById}
           onClose={() => setSelectedDia(null)}
-          onDelete={async (id) => {
-            const res = await deleteOutfitUsado(id)
-            if (!res.error) {
-              setOutfits((prev) => { const next = new Map(prev); next.delete(selectedDia); return next })
-              setSelectedDia(null)
-            }
-          }}
-          onUpdateFecha={async (id, newFecha) => {
-            const res = await updateOutfitUsado(id, { fecha: newFecha })
-            if (!res.error) {
-              setOutfits((prev) => {
-                const next = new Map(prev)
-                const existing = next.get(selectedDia)!
-                next.delete(selectedDia)
-                next.set(newFecha, { ...existing, fecha: newFecha })
-                return next
-              })
-              setSelectedDia(null)
-            }
+          onDelete={(id) => handleDeleteOutfit(id, selectedDia)}
+          onToggleEstado={(id, newEstado) => handleToggleEstado(id, selectedDia, newEstado)}
+          onAddOutfit={() => {
+            const fecha = selectedDia
+            setSelectedDia(null)
+            setRegistrando(fecha)
           }}
         />
       )}
 
-      {/* Registrar outfit modal */}
       {registrando && (
         <RegistrarOutfitModal
           fecha={registrando}
@@ -431,15 +413,6 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
           onClose={() => setRegistrando(null)}
         />
       )}
-
-      {/* Confirm replace */}
-      {confirmReplace && (
-        <ConfirmReplaceSheet
-          fecha={confirmReplace.fecha}
-          onConfirm={handleForceRegistrar}
-          onCancel={() => { setConfirmReplace(null); pendingRegData.current = null }}
-        />
-      )}
     </div>
   )
 }
@@ -448,129 +421,112 @@ export function CalendarioView({ outfitsUsados, prendas, conjuntos, initialYear,
 
 interface DiaDetalleProps {
   fecha: string
-  outfit: OutfitUsado
+  outfits: OutfitUsado[]
   prendasById: Map<string, PrendaConUrl>
   onClose: () => void
   onDelete: (id: string) => Promise<void>
-  onUpdateFecha: (id: string, newFecha: string) => Promise<void>
+  onToggleEstado: (id: string, newEstado: 'planeado' | 'usado') => Promise<void>
+  onAddOutfit: () => void
 }
 
-function DiaDetalle({ fecha, outfit, prendasById, onClose, onDelete, onUpdateFecha }: Readonly<DiaDetalleProps>) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [showEditFecha, setShowEditFecha] = useState(false)
-  const [newFecha, setNewFecha] = useState(fecha)
-  const [saving, setSaving] = useState(false)
-
-  const resolvedPrendas = outfit.prenda_ids
-    .map((id) => prendasById.get(id))
-    .filter((p): p is PrendaConUrl => p != null)
-
-  async function handleDelete() {
-    setSaving(true)
-    await onDelete(outfit.id)
-    setSaving(false)
-  }
-
-  async function handleSaveFecha() {
-    if (newFecha === fecha) { setShowEditFecha(false); return }
-    setSaving(true)
-    await onUpdateFecha(outfit.id, newFecha)
-    setSaving(false)
-  }
+function DiaDetalle({ fecha, outfits, prendasById, onClose, onDelete, onToggleEstado, onAddOutfit }: Readonly<DiaDetalleProps>) {
+  const [actingId, setActingId] = useState<string | null>(null)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onClose}>
       <div
-        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
+        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl flex flex-col max-h-[85vh] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <h3
             className="text-base font-medium text-foreground capitalize"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {formatFechaLarga(fecha)}
           </h3>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer" aria-label="Cerrar">
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            aria-label="Cerrar"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {resolvedPrendas.length > 0 && (
-          <OutfitCollage prendas={resolvedPrendas} />
-        )}
+        {/* Outfit list */}
+        <div className="flex-1 overflow-y-auto px-5 space-y-3 pb-3">
+          {outfits.map((outfit) => {
+            const cprendas = outfit.prenda_ids
+              .map((id) => prendasById.get(id))
+              .filter((p): p is PrendaConUrl => p != null)
+            const esPlaneado = outfit.estado === 'planeado'
 
-        {outfit.ocasion && (
-          <span className="inline-block text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full capitalize">
-            {OCASION_LABELS[outfit.ocasion] ?? outfit.ocasion}
-          </span>
-        )}
+            return (
+              <div
+                key={outfit.id}
+                className={`rounded-2xl border overflow-hidden ${esPlaneado ? 'border-amber-200 dark:border-amber-800' : 'border-border'}`}
+              >
+                <div className="p-3">
+                  {cprendas.length > 0 && <OutfitCollage prendas={cprendas} />}
+                </div>
+                <div className="flex items-center justify-between px-3 pb-3 gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {outfit.ocasion && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full capitalize">
+                        {OCASION_LABELS[outfit.ocasion] ?? outfit.ocasion}
+                      </span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      esPlaneado
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                    }`}>
+                      {esPlaneado ? 'Planeado' : 'Usado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={async () => {
+                        setActingId(outfit.id)
+                        await onToggleEstado(outfit.id, esPlaneado ? 'usado' : 'planeado')
+                        setActingId(null)
+                      }}
+                      disabled={actingId === outfit.id}
+                      className="text-xs px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-40 transition-colors cursor-pointer"
+                    >
+                      {esPlaneado ? 'Marcar usado' : 'Marcar planeado'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setActingId(outfit.id)
+                        await onDelete(outfit.id)
+                        setActingId(null)
+                      }}
+                      disabled={actingId === outfit.id}
+                      className="p-1.5 rounded-lg border border-border text-destructive hover:bg-destructive/5 disabled:opacity-40 transition-colors cursor-pointer"
+                      aria-label="Eliminar outfit"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
 
-        {/* Edit fecha */}
-        {showEditFecha ? (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Nueva fecha</p>
-            <input
-              type="date"
-              value={newFecha}
-              max={todayStr()}
-              onChange={(e) => setNewFecha(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-background"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowEditFecha(false)}
-                className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveFecha}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium cursor-pointer disabled:opacity-50"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        ) : showDeleteConfirm ? (
-          <div className="space-y-2">
-            <p className="text-sm text-center text-foreground">¿Eliminar este registro?</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-border text-sm cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-medium cursor-pointer disabled:opacity-50"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowEditFecha(true)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Cambiar fecha
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="py-2.5 px-4 rounded-xl border border-border text-sm text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
-              aria-label="Eliminar registro"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        {/* Add button */}
+        <div className="px-5 pb-5 shrink-0">
+          <button
+            onClick={onAddOutfit}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-primary/30 text-sm text-primary font-medium hover:bg-primary/5 transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar otro outfit
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -583,13 +539,15 @@ interface RegistrarProps {
   conjuntos: Conjunto[]
   prendas: PrendaConUrl[]
   prendasById: Map<string, PrendaConUrl>
-  onSave: (data: { prenda_ids: string[]; conjunto_id?: string | null; fecha: string; ocasion?: string | null }) => Promise<void>
+  onSave: (data: { prenda_ids: string[]; conjunto_id?: string | null; fecha: string; ocasion?: string | null; estado: 'planeado' | 'usado' }) => Promise<void>
   onClose: () => void
 }
 
 function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, onClose }: Readonly<RegistrarProps>) {
+  const isFuture = fecha > todayStr()
   const [mode, setMode] = useState<'conjuntos' | 'prendas'>('conjuntos')
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [estado, setEstado] = useState<'planeado' | 'usado'>(isFuture ? 'planeado' : 'usado')
   const [saving, setSaving] = useState(false)
 
   function togglePrenda(id: string) {
@@ -604,13 +562,13 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
   async function handleSaveManual() {
     if (selected.size === 0) return
     setSaving(true)
-    await onSave({ prenda_ids: [...selected], fecha })
+    await onSave({ prenda_ids: [...selected], fecha, estado })
     setSaving(false)
   }
 
   async function handleSaveConjunto(c: Conjunto) {
     setSaving(true)
-    await onSave({ prenda_ids: c.prenda_ids, conjunto_id: c.id, fecha, ocasion: c.ocasion })
+    await onSave({ prenda_ids: c.prenda_ids, conjunto_id: c.id, fecha, ocasion: c.ocasion, estado })
     setSaving(false)
   }
 
@@ -621,9 +579,9 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <div>
-            <p className="text-xs text-muted-foreground">Registrar outfit</p>
+            <p className="text-xs text-muted-foreground">Agregar outfit</p>
             <h3 className="text-sm font-medium text-foreground capitalize">{formatFechaLarga(fecha)}</h3>
           </div>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer" aria-label="Cerrar">
@@ -631,8 +589,28 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
           </button>
         </div>
 
-        {/* Mode tabs */}
-        <div className="flex gap-1 mx-5 mb-3 p-1 bg-muted rounded-xl">
+        {/* Estado toggle */}
+        <div className="flex gap-1 mx-5 mb-3 p-1 bg-muted rounded-xl shrink-0">
+          <button
+            onClick={() => setEstado('usado')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              estado === 'usado' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            Usado
+          </button>
+          <button
+            onClick={() => setEstado('planeado')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              estado === 'planeado' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+          >
+            Planeado
+          </button>
+        </div>
+
+        {/* Source tabs */}
+        <div className="flex gap-1 mx-5 mb-3 p-1 bg-muted rounded-xl shrink-0">
           <button
             onClick={() => setMode('conjuntos')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -710,57 +688,10 @@ function RegistrarOutfitModal({ fecha, conjuntos, prendas, prendasById, onSave, 
                 disabled={selected.size === 0 || saving}
                 className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-medium cursor-pointer disabled:opacity-40"
               >
-                {saving ? 'Guardando...' : `Guardar outfit (${selected.size} prenda${selected.size !== 1 ? 's' : ''})`}
+                {saving ? 'Guardando...' : `Guardar (${selected.size} prenda${selected.size !== 1 ? 's' : ''})`}
               </button>
             </>
           )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── ConfirmReplaceSheet ────────────────────────────────────────────────────
-
-interface ConfirmReplaceProps {
-  fecha: string
-  onConfirm: () => Promise<void>
-  onCancel: () => void
-}
-
-function ConfirmReplaceSheet({ fecha, onConfirm, onCancel }: Readonly<ConfirmReplaceProps>) {
-  const [saving, setSaving] = useState(false)
-
-  async function handleConfirm() {
-    setSaving(true)
-    await onConfirm()
-    setSaving(false)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onCancel}>
-      <div
-        className="w-full max-w-lg mx-auto bg-background rounded-t-2xl md:rounded-2xl border border-border shadow-xl p-5 space-y-4 animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-sm text-foreground text-center">
-          Ya registraste un outfit el <span className="font-medium">{formatFechaLarga(fecha)}</span>.
-          <br />¿Lo reemplazas?
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl border border-border text-sm cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium cursor-pointer disabled:opacity-50"
-          >
-            {saving ? 'Guardando...' : 'Sí, reemplazar'}
-          </button>
         </div>
       </div>
     </div>
@@ -786,28 +717,15 @@ function EstadisticasSection({ estadisticas, loading }: Readonly<EstadisticasSec
   if (!estadisticas) {
     return (
       <p className="text-sm text-muted-foreground text-center py-8">
-        Registra al menos un outfit para ver tus estadísticas.
+        Registra al menos un outfit usado para ver tus estadísticas.
       </p>
     )
   }
 
-  const { rachaDias, prendaMasUsada, prendasOlvidadas } = estadisticas
+  const { prendaMasUsada, prendasOlvidadas } = estadisticas
 
   return (
     <div className="space-y-5">
-      {/* Racha */}
-      <div className="bg-muted/60 rounded-2xl p-4 flex items-center gap-3">
-        <span className="text-2xl">🔥</span>
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Racha actual: {rachaDias} {rachaDias === 1 ? 'día' : 'días'}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {rachaDias === 0 ? 'Registra hoy para empezar una racha' : 'Días seguidos registrando tu outfit'}
-          </p>
-        </div>
-      </div>
-
       {/* Prenda más usada */}
       {prendaMasUsada ? (
         <div className="bg-muted/60 rounded-2xl p-4">
@@ -831,7 +749,7 @@ function EstadisticasSection({ estadisticas, loading }: Readonly<EstadisticasSec
         </div>
       ) : (
         <div className="bg-muted/60 rounded-2xl p-4">
-          <p className="text-xs text-muted-foreground">Sin registros en los últimos 30 días</p>
+          <p className="text-xs text-muted-foreground">Sin registros usados en los últimos 30 días</p>
         </div>
       )}
 

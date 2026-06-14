@@ -239,7 +239,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
       prenda_ids: outfit.prenda_ids,
       fecha: today,
       ocasion,
-      force: true,
+      estado: 'usado',
     })
     if (!result.error) {
       setOutfits((prev) => prev.map((o, i) => i === idx ? { ...o, registradoHoy: true } : o))

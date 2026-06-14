@@ -859,6 +859,7 @@ export async function POST(request: NextRequest) {
     .from('outfits_usados')
     .select('prenda_ids, fecha')
     .eq('user_id', user.id)
+    .eq('estado', 'usado')
     .gte('fecha', sevenDaysAgo.toISOString().split('T')[0])
     .order('fecha', { ascending: false })
   const outfitsUsadosRecientes = (usadosData ?? []) as { prenda_ids: string[]; fecha: string }[]

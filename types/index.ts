@@ -67,6 +67,7 @@ export interface OutfitUsado {
   conjunto_id: string | null
   fecha: string            // 'YYYY-MM-DD'
   ocasion: string | null
+  estado: 'planeado' | 'usado'
   created_at: string
 }
 
