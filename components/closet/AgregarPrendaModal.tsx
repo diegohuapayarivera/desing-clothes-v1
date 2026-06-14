@@ -506,26 +506,38 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                 </button>
 
                 {/* Toggle: quitar fondo */}
-                <div className="flex items-center justify-between px-1 pt-2 border-t border-border">
-                  <div>
-                    <p className="text-sm font-medium text-foreground/80">Quitar fondo</p>
-                    <p className="text-xs text-muted-foreground">Foto tipo catálogo sobre blanco</p>
+                <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between px-1">
+                    <div>
+                      <p className="text-sm font-medium text-foreground/80">Quitar fondo</p>
+                      <p className="text-xs text-muted-foreground">Foto tipo catálogo sobre blanco</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={quitarFondo}
+                      onClick={() => setQuitarFondo((v) => !v)}
+                      className={[
+                        'relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0',
+                        quitarFondo ? 'bg-primary' : 'bg-border',
+                      ].join(' ')}
+                    >
+                      <span className={[
+                        'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200',
+                        quitarFondo ? 'translate-x-5' : 'translate-x-0',
+                      ].join(' ')} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={quitarFondo}
-                    onClick={() => setQuitarFondo((v) => !v)}
-                    className={[
-                      'relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0',
-                      quitarFondo ? 'bg-primary' : 'bg-border',
-                    ].join(' ')}
-                  >
-                    <span className={[
-                      'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200',
-                      quitarFondo ? 'translate-x-5' : 'translate-x-0',
-                    ].join(' ')} />
-                  </button>
+                  {quitarFondo && (
+                    <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" aria-hidden="true">
+                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        El recorte automático puede no ser perfecto, especialmente en prendas claras o fondos complejos. Para mejores resultados, fotografiá la prenda sobre una superficie de un solo color (pared blanca, sábana, etc.).
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
