@@ -29,6 +29,7 @@ export interface Prenda {
   estilo: Estilo
   estampado: boolean
   temporada: Temporada
+  fondo_recortado: boolean
   created_at: string
 }
 

@@ -24,7 +24,7 @@ import type { PreferenciaPrendas, TagsIA } from '@/types'
 
 // ─── Helpers (module-level, no React deps) ───────────────────────────────────
 
-async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio: number }> {
+async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio: number; holesRatio: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(blob)
@@ -37,8 +37,6 @@ async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio:
         else { w = Math.round(w * maxSize / h); h = maxSize }
       }
 
-      // Step 1: draw noBg blob and apply alpha threshold to recover true colors.
-      // Without this, partial-alpha edge pixels blend with white and wash out the color.
       const alphaCanvas = document.createElement('canvas')
       alphaCanvas.width = w
       alphaCanvas.height = h
@@ -58,9 +56,34 @@ async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio:
           data[i + 3] = 0
         }
       }
+
+      // Detect holes/fragmentation: find bounding box of opaque pixels, then
+      // measure what fraction inside the bbox is transparent.
+      let holesRatio = 0
+      if (opaqueCount > 0) {
+        let minX = w, maxX = -1, minY = h, maxY = -1
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            if (data[(y * w + x) * 4 + 3] === 255) {
+              if (x < minX) minX = x
+              if (x > maxX) maxX = x
+              if (y < minY) minY = y
+              if (y > maxY) maxY = y
+            }
+          }
+        }
+        let bboxTotal = 0, bboxTransparent = 0
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            bboxTotal++
+            if (data[(y * w + x) * 4 + 3] === 0) bboxTransparent++
+          }
+        }
+        holesRatio = bboxTotal > 0 ? bboxTransparent / bboxTotal : 0
+      }
+
       alphaCtx.putImageData(imageData, 0, 0)
 
-      // Step 2: compose thresholded image on white background
       const canvas = document.createElement('canvas')
       canvas.width = w
       canvas.height = h
@@ -72,8 +95,8 @@ async function composeOnWhite(blob: Blob): Promise<{ result: Blob; opacityRatio:
 
       canvas.toBlob(
         (b) => {
-          if (b) { resolve({ result: b, opacityRatio: opaqueCount / (w * h) }) }
-          else { reject(new Error('canvas export failed')) }
+          if (b) resolve({ result: b, opacityRatio: opaqueCount / (w * h), holesRatio })
+          else reject(new Error('canvas export failed'))
         },
         'image/webp',
         0.85,
@@ -101,7 +124,7 @@ interface Props {
   onSaved: () => void
 }
 
-type Step = 'capture' | 'analyzing' | 'form' | 'saving' | 'success'
+type Step = 'capture' | 'analyzing' | 'preview' | 'form' | 'saving' | 'success'
 
 interface FormState {
   foto_path: string
@@ -176,6 +199,16 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   const [analysisLabel, setAnalysisLabel] = useState('Procesando...')
   const [quitarFondo, setQuitarFondo] = useState(true)
   const [badMaskNotice, setBadMaskNotice] = useState<string | null>(null)
+
+  // State for the preview/choice step
+  const [bgRemovedBlob, setBgRemovedBlob] = useState<Blob | null>(null)
+  const [originalBlob, setOriginalBlob] = useState<Blob | null>(null)
+  const [bgRemovedPreviewUrl, setBgRemovedPreviewUrl] = useState<string | null>(null)
+  const [originalPreviewUrl, setOriginalPreviewUrl] = useState<string | null>(null)
+  const [isDubious, setIsDubious] = useState(false)
+  const [previewChoice, setPreviewChoice] = useState<'recortada' | 'original'>('recortada')
+  const [fondoRecortado, setFondoRecortado] = useState(false)
+
   const [form, setForm] = useState<FormState>({
     foto_path: '',
     categoria: null,
@@ -211,6 +244,47 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     }))
   }
 
+  // Upload selected blob to /api/etiquetar and move to form step
+  async function proceedToAnalyze(processedBlob: Blob, compressedOriginal: Blob | null, wasBgRemoved: boolean) {
+    const objectUrl = URL.createObjectURL(processedBlob)
+    setPreview(objectUrl)
+    setStep('analyzing')
+    setAnalysisLabel('Analizando prenda...')
+    setFondoRecortado(wasBgRemoved)
+    try {
+      const fd = new FormData()
+      fd.append('image', processedBlob, 'prenda.webp')
+      if (compressedOriginal !== null && compressedOriginal !== processedBlob) {
+        fd.append('image_original', compressedOriginal, 'original.jpg')
+      }
+      const res = await fetch('/api/etiquetar', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('server error')
+      const data: { foto_path: string; tags: TagsIA | null } = await res.json()
+      setForm({
+        foto_path: data.foto_path,
+        categoria: data.tags?.categoria ?? null,
+        tipo: data.tags?.tipo ?? null,
+        color_principal: data.tags?.color_principal ?? null,
+        color_secundario: data.tags?.color_secundario ?? null,
+        estilo: data.tags?.estilo ?? null,
+        estampado: data.tags?.estampado ?? false,
+        temporada: data.tags?.temporada ?? 'todo_el_año',
+      })
+      setStep('form')
+    } catch {
+      setError('No se pudo analizar la imagen. Rellena los datos manualmente.')
+      setStep('form')
+    }
+  }
+
+  async function handleConfirmFoto() {
+    if (!bgRemovedBlob || !originalBlob) return
+    const isRecortada = previewChoice === 'recortada'
+    const processedBlob = isRecortada ? bgRemovedBlob : originalBlob
+    const compressedOriginal = isRecortada ? originalBlob : null
+    await proceedToAnalyze(processedBlob, compressedOriginal, isRecortada)
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -218,14 +292,8 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     setBadMaskNotice(null)
     setStep('analyzing')
 
-    let processedBlob: Blob
-    // Compressed original (jpeg) — always sent to /api/etiquetar as image_original
-    // so Claude sees faithful colors even when processedBlob has a white background.
-    let compressedOriginal: Blob | null = null
-
     if (quitarFondo) {
       setAnalysisLabel('Recortando prenda...')
-      // Start compressing original immediately so it runs in parallel with bg removal.
       const compressTask = imageCompression(file, {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1024,
@@ -251,58 +319,33 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
           ),
           compressTask,
         ])
-        compressedOriginal = compressed
-        const { result, opacityRatio } = await composeOnWhite(noBg)
-        if (opacityRatio < 0.15 || opacityRatio > 0.95) {
-          // Bad mask: almost nothing or almost everything was cut. Use original.
-          processedBlob = compressedOriginal
-          setBadMaskNotice('No pudimos aislar bien la prenda — se guardó la foto original.')
-        } else {
-          processedBlob = result
-        }
+        const { result, opacityRatio, holesRatio } = await composeOnWhite(noBg)
+
+        const bgUrl = URL.createObjectURL(result)
+        const origUrl = URL.createObjectURL(compressed)
+        setBgRemovedBlob(result)
+        setOriginalBlob(compressed)
+        setBgRemovedPreviewUrl(bgUrl)
+        setOriginalPreviewUrl(origUrl)
+
+        // Mark as dubious if: too little/much coverage OR too many holes inside bbox
+        const dubious = opacityRatio < 0.15 || opacityRatio > 0.95 || holesRatio > 0.25
+        setIsDubious(dubious)
+        setPreviewChoice(dubious ? 'original' : 'recortada')
+        setStep('preview')
       } catch {
-        compressedOriginal = await compressTask
-        processedBlob = compressedOriginal
+        const compressed = await compressTask
+        setBadMaskNotice('No se pudo recortar el fondo — se guardó la foto original.')
+        await proceedToAnalyze(compressed, null, false)
       }
     } else {
-      processedBlob = await imageCompression(file, {
+      const compressed = await imageCompression(file, {
         maxSizeMB: 0.2,
         maxWidthOrHeight: 1024,
         fileType: 'image/webp',
         useWebWorker: true,
       })
-    }
-
-    const objectUrl = URL.createObjectURL(processedBlob)
-    setPreview(objectUrl)
-
-    setAnalysisLabel('Analizando prenda...')
-    try {
-      const fd = new FormData()
-      fd.append('image', processedBlob, 'prenda.webp')
-      // Send original separately so the server uses it for AI color detection.
-      // Skip when compressedOriginal IS processedBlob (bad-mask fallback) to avoid duplication.
-      if (compressedOriginal !== null && compressedOriginal !== processedBlob) {
-        fd.append('image_original', compressedOriginal, 'original.jpg')
-      }
-      const res = await fetch('/api/etiquetar', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('server error')
-      const data: { foto_path: string; tags: TagsIA | null } = await res.json()
-
-      setForm({
-        foto_path: data.foto_path,
-        categoria: data.tags?.categoria ?? null,
-        tipo: data.tags?.tipo ?? null,
-        color_principal: data.tags?.color_principal ?? null,
-        color_secundario: data.tags?.color_secundario ?? null,
-        estilo: data.tags?.estilo ?? null,
-        estampado: data.tags?.estampado ?? false,
-        temporada: data.tags?.temporada ?? 'todo_el_año',
-      })
-      setStep('form')
-    } catch {
-      setError('No se pudo analizar la imagen. Rellena los datos manualmente.')
-      setStep('form')
+      await proceedToAnalyze(compressed, null, false)
     }
   }
 
@@ -324,6 +367,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     fd.append('estilo', form.estilo!)
     fd.append('estampado', String(form.estampado))
     fd.append('temporada', form.temporada)
+    fd.append('fondo_recortado', String(fondoRecortado))
 
     startTransition(async () => {
       const result = await savePrenda(fd)
@@ -337,7 +381,6 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
   }
 
   function handleClose() {
-    // If a photo was uploaded but the prenda was never saved, delete the orphan file
     if (form.foto_path && step !== 'success') {
       deleteFotoHuerfana(form.foto_path).catch(() => null)
     }
@@ -350,6 +393,13 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
     setError(null)
     setBadMaskNotice(null)
     setAnalysisLabel('Procesando...')
+    setBgRemovedBlob(null)
+    setOriginalBlob(null)
+    setBgRemovedPreviewUrl(null)
+    setOriginalPreviewUrl(null)
+    setIsDubious(false)
+    setPreviewChoice('recortada')
+    setFondoRecortado(false)
     setForm({
       foto_path: '',
       categoria: null,
@@ -498,6 +548,88 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                 <p className="text-sm text-foreground font-medium">{analysisLabel}</p>
                 <p className="text-xs text-muted-foreground">Esto puede tardar unos segundos</p>
               </div>
+            </div>
+          )}
+
+          {/* ── Step: preview (elegir foto) ── */}
+          {step === 'preview' && (
+            <div className="flex flex-col gap-5 py-4">
+              <div>
+                <p className="text-base font-light text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                  ¿Cuál foto se ve mejor?
+                </p>
+                {isDubious ? (
+                  <p className="text-xs text-amber-600 mt-1">
+                    El recorte no salió del todo limpio — revisá cuál se ve mejor.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Elegí la versión que prefieras para tu clóset.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Sin fondo */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewChoice('recortada')}
+                  className={[
+                    'flex flex-col rounded-2xl overflow-hidden border-2 transition-all active:scale-[0.98]',
+                    previewChoice === 'recortada' ? 'border-primary' : 'border-border',
+                  ].join(' ')}
+                >
+                  <div className="aspect-square bg-white">
+                    {bgRemovedPreviewUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={bgRemovedPreviewUrl} alt="Sin fondo" className="w-full h-full object-contain" />
+                    )}
+                  </div>
+                  <div className={[
+                    'flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium',
+                    previewChoice === 'recortada'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-foreground/70',
+                  ].join(' ')}>
+                    {previewChoice === 'recortada' && <Check className="w-3 h-3" />}
+                    Sin fondo
+                  </div>
+                </button>
+
+                {/* Foto original */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewChoice('original')}
+                  className={[
+                    'flex flex-col rounded-2xl overflow-hidden border-2 transition-all active:scale-[0.98]',
+                    previewChoice === 'original' ? 'border-primary' : 'border-border',
+                  ].join(' ')}
+                >
+                  <div className="aspect-square bg-muted overflow-hidden">
+                    {originalPreviewUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={originalPreviewUrl} alt="Foto original" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className={[
+                    'flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium',
+                    previewChoice === 'original'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-foreground/70',
+                  ].join(' ')}>
+                    {previewChoice === 'original' && <Check className="w-3 h-3" />}
+                    Foto original
+                  </div>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { void handleConfirmFoto() }}
+                className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Continuar →
+              </button>
             </div>
           )}
 

@@ -111,6 +111,7 @@ const PrendaSchema = z.object({
   estilo: z.enum(ESTILOS),
   estampado: z.boolean(),
   temporada: z.enum(TEMPORADAS),
+  fondo_recortado: z.boolean().optional().default(false),
 })
 
 const TagsSchema = PrendaSchema.omit({ foto_path: true })
@@ -131,6 +132,7 @@ export async function savePrenda(formData: FormData): Promise<{ error?: string }
     estilo: formData.get('estilo'),
     estampado: formData.get('estampado') === 'true',
     temporada: formData.get('temporada'),
+    fondo_recortado: formData.get('fondo_recortado') === 'true',
   }
 
   const result = PrendaSchema.safeParse(raw)
