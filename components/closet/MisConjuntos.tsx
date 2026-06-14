@@ -19,12 +19,14 @@ function ConjuntoDetalle({
   onClose,
   onDeleted,
   onRenamed,
+  onPrendaTap,
 }: Readonly<{
   conjunto: Conjunto
   prendas: PrendaConUrl[]
   onClose: () => void
   onDeleted: () => void
   onRenamed: (nombre: string) => void
+  onPrendaTap: (sortedPrendas: PrendaConUrl[], idx: number) => void
 }>) {
   const [mode, setMode] = useState<'view' | 'rename' | 'confirmDelete' | 'deleting' | 'meLoPuse'>('view')
   const [nombreInput, setNombreInput] = useState(conjunto.nombre ?? '')
@@ -95,7 +97,7 @@ function ConjuntoDetalle({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-5">
-          <OutfitCollage prendas={prendas} />
+          <OutfitCollage prendas={prendas} onPrendaTap={onPrendaTap} />
 
           {conjunto.justificacion && (
             <p className="text-sm text-muted-foreground italic leading-relaxed">
@@ -304,7 +306,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
               <div className="p-2">
                 <OutfitCollage
                   prendas={cprendas}
-                  onPrendaTap={(sortedPrendas, idx) => setVisorPrendas({ prendas: sortedPrendas, idx })}
+                  onPrendaTap={() => setDetalle(c)}
                 />
               </div>
               <div className="px-3 pb-3 space-y-1">
@@ -342,6 +344,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
             )
             setDetalle((prev) => (prev ? { ...prev, nombre } : null))
           }}
+          onPrendaTap={(sorted, idx) => setVisorPrendas({ prendas: sorted, idx })}
         />
       )}
 
