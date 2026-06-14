@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { ClosetView } from '@/components/closet/ClosetView'
 import { EmptyStateAgregar } from '@/components/closet/EmptyStateAgregar'
+import { PlaneadosHoyBanner } from '@/components/closet/PlaneadosHoyBanner'
+import { fetchPlaneadosHoy } from '@/app/closet/actions'
 import { Sparkles } from 'lucide-react'
 import type { Profile, Prenda, PrendaConUrl } from '@/types'
 
@@ -71,6 +73,8 @@ export default async function ClosetPage() {
   const profileLon = profile?.lon ?? null
   const tieneRopa = prendasConUrls.length > 0
 
+  const planeadosHoy = await fetchPlaneadosHoy()
+
   return (
     <>
       <div className="mb-8 animate-fade-up">
@@ -84,6 +88,10 @@ export default async function ClosetPage() {
           Hola, {nombre?.split(' ')[0]} ✦
         </h1>
       </div>
+
+      {planeadosHoy.length > 0 && (
+        <PlaneadosHoyBanner planeados={planeadosHoy} />
+      )}
 
       {tieneRopa ? (
         <ClosetView

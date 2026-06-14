@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
-import type { Conjunto, MotivoFeedback, OutfitUsado } from '@/types'
+import type { Conjunto, MotivoFeedback, OutfitUsado, Prenda, PrendaConUrl } from '@/types'
 
 // ── Conjuntos ──────────────────────────────────────────────────────────────
 
@@ -414,6 +414,56 @@ export async function fetchOutfitsUsadosMes(year: number, month: number): Promis
     .order('fecha', { ascending: false })
 
   return (data ?? []) as OutfitUsado[]
+}
+
+export async function fetchPlaneadosHoy(): Promise<Array<{ outfit: OutfitUsado; prendas: PrendaConUrl[] }>> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const hoy = new Date().toISOString().split('T')[0]
+
+  const { data } = await supabase
+    .from('outfits_usados')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('fecha', hoy)
+    .eq('estado', 'planeado')
+    .order('created_at', { ascending: true })
+
+  if (!data || data.length === 0) return []
+
+  const outfits = data as OutfitUsado[]
+  const allIds = [...new Set(outfits.flatMap((o) => o.prenda_ids))]
+  if (allIds.length === 0) return outfits.map((outfit) => ({ outfit, prendas: [] }))
+
+  const { data: prendasData } = await supabase
+    .from('prendas')
+    .select('*')
+    .eq('user_id', user.id)
+    .in('id', allIds)
+
+  const prendas = (prendasData ?? []) as Prenda[]
+  if (prendas.length === 0) return outfits.map((outfit) => ({ outfit, prendas: [] }))
+
+  const { data: signedData } = await supabase.storage
+    .from('prendas-fotos')
+    .createSignedUrls(prendas.map((p) => p.foto_path), 3600)
+
+  const urlMap = new Map((signedData ?? []).map((s) => [s.path, s.signedUrl ?? '']))
+  const prendasConUrls: PrendaConUrl[] = prendas.map((p) => ({
+    ...p,
+    signedUrl: urlMap.get(p.foto_path) ?? '',
+  }))
+  const byId = new Map(prendasConUrls.map((p) => [p.id, p]))
+
+  return outfits.map((outfit) => ({
+    outfit,
+    prendas: outfit.prenda_ids.flatMap((id) => {
+      const p = byId.get(id)
+      return p ? [p] : []
+    }),
+  }))
 }
 
 export async function fetchOutfitsUsadosRango(desde: string, hasta: string): Promise<OutfitUsado[]> {
