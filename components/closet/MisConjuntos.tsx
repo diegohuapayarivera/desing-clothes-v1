@@ -7,6 +7,7 @@ import { ArmarConjuntoModal } from './ArmarConjuntoModal'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
+import { hoyLima, sumarDias } from '@/lib/fecha'
 import type { Conjunto, PrendaConUrl } from '@/types'
 
 interface Props {
@@ -35,9 +36,9 @@ function ConjuntoDetalle({
   const [nombreInput, setNombreInput] = useState(conjunto.nombre ?? '')
   const [, startTransition] = useTransition()
 
-  const today = new Date().toISOString().split('T')[0]
-  const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })()
-  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()
+  const today = hoyLima()
+  const thirtyDaysAgo = sumarDias(today, -30)
+  const tomorrow = sumarDias(today, 1)
 
   const [fechaMeLoPuse, setFechaMeLoPuse] = useState(today)
   const [registrado, setRegistrado] = useState(false)

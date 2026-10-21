@@ -5,6 +5,7 @@ import { X, Heart, RefreshCw, Sparkles, Shirt, MapPin, Search, Check } from 'luc
 import { obtenerClima } from '@/lib/clima'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
+import { hoyLima } from '@/lib/fecha'
 import type { PrendaConUrl, Outfit, MotivoFeedback } from '@/types'
 import { saveGeoLocation, saveConjunto, saveFeedback, registrarOutfitUsado } from '@/app/closet/actions'
 import { OutfitCollage } from './OutfitCollage'
@@ -234,7 +235,7 @@ export function RecomendarModal({ prendas, ciudad, profileLat, profileLon, onClo
   async function handleRegistrarHoy(idx: number) {
     const outfit = outfits[idx]
     if (!outfit || !ocasion) return
-    const today = new Date().toISOString().split('T')[0]
+    const today = hoyLima()
     const result = await registrarOutfitUsado({
       prenda_ids: outfit.prenda_ids,
       fecha: today,

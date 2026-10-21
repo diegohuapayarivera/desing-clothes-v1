@@ -10,6 +10,7 @@ import {
   fetchOutfitsUsadosMes,
   fetchOutfitsUsadosRango,
 } from '@/app/closet/actions'
+import { hoyLima, sumarDias } from '@/lib/fecha'
 import type { OutfitUsado, PrendaConUrl, Conjunto } from '@/types'
 
 interface Props {
@@ -27,19 +28,15 @@ function toDateStr(y: number, m: number, d: number): string {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0]
+  return hoyLima()
 }
 
 function thirtyDaysAgoStr(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 30)
-  return d.toISOString().split('T')[0]
+  return sumarDias(hoyLima(), -30)
 }
 
 function sixtyDaysAgoStr(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 60)
-  return d.toISOString().split('T')[0]
+  return sumarDias(hoyLima(), -60)
 }
 
 function buildMapMulti(list: OutfitUsado[]): Map<string, OutfitUsado[]> {

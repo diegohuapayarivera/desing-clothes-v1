@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { CalendarioView } from '@/components/closet/CalendarioView'
+import { mesActualLima } from '@/lib/fecha'
 import type { Prenda, PrendaConUrl, Conjunto, OutfitUsado } from '@/types'
 
 export default async function CalendarioPage() {
@@ -8,9 +9,7 @@ export default async function CalendarioPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const now = new Date()
-  const calYear = now.getFullYear()
-  const calMonth = now.getMonth()
+  const { year: calYear, month: calMonth } = mesActualLima()
   const calMm = String(calMonth + 1).padStart(2, '0')
   const calFirstDay = `${calYear}-${calMm}-01`
   const calLastDate = new Date(calYear, calMonth + 1, 0).getDate()

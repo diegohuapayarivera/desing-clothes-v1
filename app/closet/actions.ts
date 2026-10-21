@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { CATEGORIAS, COLORES, ESTILOS, TEMPORADAS, TODOS_LOS_TIPOS_VALORES } from '@/lib/taxonomia'
+import { hoyLima } from '@/lib/fecha'
 import type { Conjunto, MotivoFeedback, OutfitUsado, Prenda, PrendaConUrl } from '@/types'
 
 // ── Conjuntos ──────────────────────────────────────────────────────────────
@@ -276,16 +277,16 @@ export async function deletePrenda(id: string): Promise<{ error?: string }> {
 
   if (fetchError || !prenda) return { error: 'Prenda no encontrada' }
 
+  // Delete DB record first (RLS checks ownership) so a failure leaves conjuntos intact
+  const { error: dbError } = await supabase.from('prendas').delete().eq('id', id)
+  if (dbError) return { error: 'Error al eliminar' }
+
   // Delete conjuntos that contain this prenda
   await supabase
     .from('conjuntos')
     .delete()
     .eq('user_id', user.id)
     .contains('prenda_ids', [id])
-
-  // Delete DB record (RLS checks ownership)
-  const { error: dbError } = await supabase.from('prendas').delete().eq('id', id)
-  if (dbError) return { error: 'Error al eliminar' }
 
   // Delete from Storage (non-blocking — ignore storage error)
   await supabase.storage.from('prendas-fotos').remove([prenda.foto_path])
@@ -331,6 +332,20 @@ export async function updatePrendaTags(
 
 // ── Outfits usados ─────────────────────────────────────────────────────────
 
+async function prendasSonDelUsuario(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  prendaIds: string[],
+): Promise<boolean> {
+  if (prendaIds.length === 0) return false
+  const { count } = await supabase
+    .from('prendas')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .in('id', prendaIds)
+  return count === prendaIds.length
+}
+
 export async function registrarOutfitUsado(data: {
   prenda_ids: string[]
   conjunto_id?: string | null
@@ -341,6 +356,9 @@ export async function registrarOutfitUsado(data: {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+  if (!(await prendasSonDelUsuario(supabase, user.id, data.prenda_ids))) {
+    return { error: 'Prendas inválidas' }
+  }
 
   const { data: inserted, error } = await supabase
     .from('outfits_usados')
@@ -367,10 +385,15 @@ export async function updateOutfitUsado(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
+  if (updates.prenda_ids && !(await prendasSonDelUsuario(supabase, user.id, updates.prenda_ids))) {
+    return { error: 'Prendas inválidas' }
+  }
 
+  // Whitelist columns: server actions receive arbitrary client objects
+  const { prenda_ids, fecha, ocasion, estado } = updates
   const { error } = await supabase
     .from('outfits_usados')
-    .update(updates)
+    .update({ prenda_ids, fecha, ocasion, estado })
     .eq('id', id)
     .eq('user_id', user.id)
 
@@ -421,7 +444,7 @@ export async function fetchPlaneadosHoy(): Promise<Array<{ outfit: OutfitUsado; 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return []
 
-  const hoy = new Date().toISOString().split('T')[0]
+  const hoy = hoyLima()
 
   const { data } = await supabase
     .from('outfits_usados')

@@ -105,6 +105,9 @@ export async function POST(request: NextRequest) {
     // Use it for AI so Claude sees the real colors, not the composited result.
     const fileOriginal = formData.get('image_original')
     if (fileOriginal instanceof Blob) {
+      if (fileOriginal.size > 10 * 1024 * 1024) {
+        return NextResponse.json({ error: 'La imagen no puede superar los 10 MB' }, { status: 413 })
+      }
       const bufferOrig = await fileOriginal.arrayBuffer()
       imageBytesForAI = new Uint8Array(bufferOrig)
       mimeTypeForAI =
