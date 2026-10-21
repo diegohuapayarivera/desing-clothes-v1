@@ -20,7 +20,6 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'Clóset Digital',
   description: 'Digitaliza tu armario y recibe recomendaciones de outfits con IA.',
-  icons: { icon: '/favicon.ico' },
 }
 
 export const viewport: Viewport = {
