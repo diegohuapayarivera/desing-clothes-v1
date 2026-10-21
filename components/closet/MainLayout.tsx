@@ -4,36 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Shirt, Heart, CalendarDays } from 'lucide-react'
 import { signOut } from '@/app/actions'
-
-function HangerIcon({ className }: Readonly<{ className?: string }>) {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M32 6C32 6 32 13 32 15.5C32 18 34 20 36.5 20C39 20 41 18 41 15.5"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M32 20L8 48H56L32 20Z"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path d="M16 56H48" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M16 48V56M48 48V56" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  )
-}
+import { Isotipo } from '@/components/brand/Isotipo'
 
 const TABS = [
   { href: '/', label: 'Mi clóset', Icon: Shirt },
@@ -55,7 +26,7 @@ export function MainLayout({ initials, children }: Readonly<Props>) {
         <div className="max-w-lg lg:max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <HangerIcon className="w-4 h-4 text-primary" />
+              <Isotipo className="w-4 h-4 text-primary" />
             </div>
             <span
               className="text-base font-medium text-foreground"

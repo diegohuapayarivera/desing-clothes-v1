@@ -1,44 +1,5 @@
+import Image from 'next/image'
 import { signInWithGoogle } from './actions'
-
-function HangerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M32 6C32 6 32 13 32 15.5C32 18 34 20 36.5 20C39 20 41 18 41 15.5"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M32 20L8 48H56L32 20Z"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path
-        d="M16 56H48"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 48V56M48 48V56"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
 
 function GoogleIcon() {
   return (
@@ -101,21 +62,17 @@ export default function LoginPage({
       {/* Card */}
       <div className="w-full max-w-sm animate-fade-up">
         <div className="bg-card rounded-3xl border border-border/60 shadow-sm shadow-primary/5 px-8 py-10 flex flex-col items-center gap-6">
-          {/* Logo */}
-          <div className="opacity-0 animate-fade-up delay-100">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <HangerIcon className="w-9 h-9 text-primary" />
-            </div>
-          </div>
-
-          {/* Heading */}
-          <div className="text-center space-y-2 opacity-0 animate-fade-up delay-200">
-            <h1
-              className="text-4xl font-display font-medium tracking-tight text-foreground"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Clóset Digital
-            </h1>
+          {/* Logo — el emblema ya incluye el nombre, el h1 queda solo para lectores de pantalla */}
+          <div className="w-full text-center space-y-3 opacity-0 animate-fade-up delay-100">
+            <h1 className="sr-only">Clóset Digital</h1>
+            <Image
+              src="/logo-emblema.png"
+              alt=""
+              width={760}
+              height={340}
+              priority
+              className="w-full h-auto"
+            />
             <p className="text-sm text-muted-foreground leading-relaxed">
               Tu armario, inteligente.
             </p>

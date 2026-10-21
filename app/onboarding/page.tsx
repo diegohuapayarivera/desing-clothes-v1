@@ -1,46 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { OnboardingForm } from './OnboardingForm'
-
-function HangerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M32 6C32 6 32 13 32 15.5C32 18 34 20 36.5 20C39 20 41 18 41 15.5"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M32 20L8 48H56L32 20Z"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path
-        d="M16 56H48"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 48V56M48 48V56"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
+import { Isotipo } from '@/components/brand/Isotipo'
 
 export default async function OnboardingPage({
   searchParams,
@@ -89,7 +50,7 @@ export default async function OnboardingPage({
       {/* Logo header */}
       <div className="flex items-center gap-2 mb-10 animate-fade-in">
         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-          <HangerIcon className="w-5 h-5 text-primary" />
+          <Isotipo className="w-5 h-5 text-primary" />
         </div>
         <span
           className="text-lg font-medium text-foreground"
