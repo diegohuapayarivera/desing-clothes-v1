@@ -1,12 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { extractText } from '@/lib/anthropic'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-const OPINAR_MODEL = 'claude-haiku-4-5-20251001'
+import { MODELO_RAPIDO, pedirTexto } from '@/lib/ia'
 
 const RequestSchema = z.object({
   prenda_ids: z.array(z.string()).min(1).max(20),
@@ -88,12 +83,14 @@ ${desc}${contexto ? `\n\n${contexto}` : ''}
 Comenta si las prendas combinan bien, si los colores armonizan y una sugerencia constructiva si aplica. Sé conciso. Solo la opinión, sin introducción.`
 
   try {
-    const message = await anthropic.messages.create({
-      model: OPINAR_MODEL,
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
+    const opinion = await pedirTexto({
+      supabase,
+      userId: user.id,
+      ruta: 'opinar',
+      model: MODELO_RAPIDO,
+      maxTokens: 1024,
+      content: prompt,
     })
-    const opinion = extractText(message.content)
     if (!opinion) return NextResponse.json({ error: 'Sin respuesta' }, { status: 502 })
     return NextResponse.json({ opinion })
   } catch (err) {
