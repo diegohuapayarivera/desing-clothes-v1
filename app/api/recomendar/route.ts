@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import { extractText } from '@/lib/anthropic'
+import { LIMITE_DIARIO_ESTILISTA, MODELO_ESTILISTA, llamadasEstilistaHoy, pedirTexto } from '@/lib/ia'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -8,7 +7,53 @@ import { OCASION_LABELS, filtrarCandidatas, validarCompatibilidadFijas } from '@
 import { hoyLima, sumarDias } from '@/lib/fecha'
 import type { Prenda } from '@/types'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+type Supabase = Awaited<ReturnType<typeof createClient>>
+interface CtxIA {
+  supabase: Supabase
+  userId: string
+}
+
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+
+function restaurarIds(value: unknown, idPorAlias: Map<string, string>): unknown {
+  if (typeof value === 'string') return idPorAlias.get(value) ?? value
+  if (Array.isArray(value)) return value.map((v) => restaurarIds(v, idPorAlias))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, restaurarIds(v, idPorAlias)]),
+    )
+  }
+  return value
+}
+
+/**
+ * Envía el prompt al estilista con los UUID de las prendas cambiados por alias
+ * cortos (p1, p2…): cada UUID ocupa ~25 tokens y se repite en el prompt y en la
+ * respuesta. Devuelve el JSON de la respuesta con los UUID originales, o null.
+ */
+async function pedirJsonEstilista(ctx: CtxIA, prompt: string, maxTokens: number): Promise<unknown> {
+  const aliasPorId = new Map<string, string>()
+  const promptCorto = prompt.replace(UUID_RE, (id) => {
+    let alias = aliasPorId.get(id)
+    if (!alias) {
+      alias = `p${aliasPorId.size + 1}`
+      aliasPorId.set(id, alias)
+    }
+    return alias
+  })
+  const idPorAlias = new Map([...aliasPorId].map(([id, alias]) => [alias, id]))
+
+  const text = await pedirTexto({
+    ...ctx,
+    ruta: 'recomendar',
+    model: MODELO_ESTILISTA,
+    maxTokens,
+    content: promptCorto,
+  })
+  const jsonMatch = /\{[\s\S]*\}/.exec(text)
+  if (!jsonMatch) return null
+  return restaurarIds(JSON.parse(jsonMatch[0]), idPorAlias)
+}
 
 interface PrendaIA {
   id: string
@@ -271,6 +316,7 @@ function validateOutfit(
 }
 
 async function callClaude(
+  ctx: CtxIA,
   prendas: PrendaIA[],
   ocasion: Ocasion,
   clima: NivelClima,
@@ -279,17 +325,13 @@ async function callClaude(
   motivo?: string | null,
   usadosNote?: string,
 ): Promise<{ prenda_ids: string[]; justificacion: string }[]> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote) }],
-  })
+  const parsed = await pedirJsonEstilista(
+    ctx,
+    buildPrompt(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote),
+    4096,
+  )
+  if (parsed === null) throw new Error('No JSON in response')
 
-  const text = extractText(message.content)
-  const jsonMatch = /\{[\s\S]*\}/.exec(text)
-  if (!jsonMatch) throw new Error('No JSON in response')
-
-  const parsed = JSON.parse(jsonMatch[0])
   const result = ResponseSchema.safeParse(parsed)
   if (!result.success) throw new Error('Invalid JSON shape')
 
@@ -297,19 +339,12 @@ async function callClaude(
 }
 
 async function callClaudeReplace(
+  ctx: CtxIA,
   prompt: string,
 ): Promise<z.infer<typeof OutfitSchema> | null> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 512,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  const parsed = await pedirJsonEstilista(ctx, prompt, 2048)
+  if (parsed === null) return null
 
-  const text = extractText(message.content)
-  const jsonMatch = /\{[\s\S]*\}/.exec(text)
-  if (!jsonMatch) return null
-
-  const parsed = JSON.parse(jsonMatch[0])
   const result = OutfitSchema.safeParse(parsed)
   return result.success ? result.data : null
 }
@@ -435,6 +470,14 @@ export async function POST(request: NextRequest) {
 
   const { ocasion, clima, mode } = body
 
+  if ((await llamadasEstilistaHoy(supabase, user.id)) >= LIMITE_DIARIO_ESTILISTA) {
+    return NextResponse.json(
+      { error: 'Llegaste al límite de recomendaciones por hoy. Vuelve a intentarlo mañana.' },
+      { status: 429 },
+    )
+  }
+  const ctx: CtxIA = { supabase, userId: user.id }
+
   // ── Replace mode ─────────────────────────────────────────────────────────
   if (mode === 'replace') {
     const { outfit_actual, prenda_descartada, excludePrendaIds } = body
@@ -542,11 +585,11 @@ export async function POST(request: NextRequest) {
     let replacement: { prenda_ids: string[]; justificacion: string } | null = null
 
     try {
-      const r1 = await callClaudeReplace(replacePrompt)
+      const r1 = await callClaudeReplace(ctx, replacePrompt)
       if (r1 && verify(r1)) {
         replacement = r1
       } else {
-        const r2 = await callClaudeReplace(replacePrompt)
+        const r2 = await callClaudeReplace(ctx, replacePrompt)
         if (r2 && verify(r2)) replacement = r2
       }
     } catch (err) {
@@ -725,18 +768,9 @@ export async function POST(request: NextRequest) {
 
     let validosBA: { prenda_ids: string[]; justificacion: string }[] = []
     try {
-      const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: bPrompt }],
-      })
-      const text = extractText(message.content)
-      const jsonMatch = /\{[\s\S]*\}/.exec(text)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0])
-        const result = ResponseSchema.safeParse(parsed)
-        if (result.success) validosBA = filterBA(result.data.outfits)
-      }
+      const parsed = await pedirJsonEstilista(ctx, bPrompt, 4096)
+      const result = ResponseSchema.safeParse(parsed)
+      if (result.success) validosBA = filterBA(result.data.outfits)
     } catch (err) {
       console.error('[recomendar] build_around — Claude falló (1er intento):', err)
     }
@@ -745,19 +779,10 @@ export async function POST(request: NextRequest) {
       try {
         const retryAvoid = [...(avoid ?? []), ...validosBA.map((o) => o.prenda_ids)]
         const bPrompt2 = buildBuildAroundPrompt(fijasIA, candidatasIA, ocasion, clima, personalizacion, retryAvoid)
-        const message2 = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: bPrompt2 }],
-        })
-        const text2 = extractText(message2.content)
-        const jsonMatch2 = /\{[\s\S]*\}/.exec(text2)
-        if (jsonMatch2) {
-          const parsed2 = JSON.parse(jsonMatch2[0])
-          const result2 = ResponseSchema.safeParse(parsed2)
-          if (result2.success) {
-            validosBA = deduplicar([...validosBA, ...filterBA(result2.data.outfits)])
-          }
+        const parsed2 = await pedirJsonEstilista(ctx, bPrompt2, 4096)
+        const result2 = ResponseSchema.safeParse(parsed2)
+        if (result2.success) {
+          validosBA = deduplicar([...validosBA, ...filterBA(result2.data.outfits)])
         }
       } catch (err) {
         console.error('[recomendar] build_around — Claude falló (reintento):', err)
@@ -901,13 +926,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const primera = await callClaude(prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote)
+    const primera = await callClaude(ctx, prendas, ocasion, clima, personalizacion, avoid, motivo, usadosNote)
     let validos = filter(primera).filter((o) => !isSavedAlready(o))
 
     if (validos.length < 2) {
       try {
         const retryAvoid = [...(avoid ?? []), ...validos.map((o) => o.prenda_ids)]
-        const segunda = await callClaude(prendas, ocasion, clima, personalizacion, retryAvoid, undefined, usadosNote)
+        const segunda = await callClaude(ctx, prendas, ocasion, clima, personalizacion, retryAvoid, undefined, usadosNote)
         validos = deduplicar([...validos, ...filter(segunda).filter((o) => !isSavedAlready(o))])
       } catch (err) {
         console.error('[recomendar] full — Claude falló (reintento):', err)

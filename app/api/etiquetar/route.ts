@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -13,7 +12,7 @@ import {
   normalizarColor,
   normalizarTemporada,
 } from '@/lib/taxonomia'
-import { extractText } from '@/lib/anthropic'
+import { MODELO_RAPIDO, pedirTexto } from '@/lib/ia'
 
 const TagsSchema = z.object({
   categoria: z.enum(CATEGORIAS),
@@ -26,8 +25,6 @@ const TagsSchema = z.object({
 })
 
 type Tags = z.infer<typeof TagsSchema>
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 /** Normalize raw AI output before Zod validation. */
 function normalizarRespuesta(raw: Record<string, unknown>): Record<string, unknown> {
@@ -148,7 +145,7 @@ export async function POST(request: NextRequest) {
     temporada: Tags['temporada']
   }
 
-  // Call Claude Haiku for auto-tagging (uses original photo bytes for faithful colors)
+  // Call Claude (fast model) for auto-tagging (uses original photo bytes for faithful colors)
   let tags: ApiTags | null = null
 
   try {
@@ -169,24 +166,20 @@ Lista completa de tipos válidos: ${TODOS_LOS_TIPOS_VALORES.join(', ')}
 Responde con este JSON exacto:
 {"categoria":"<valor>","tipo":"<valor>","color_principal":"<valor>","color_secundario":"<valor o null>","estilo":"<valor>","estampado":<true|false>,"temporada":"<valor>"}`
 
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
-      messages: [
+    const text = await pedirTexto({
+      supabase,
+      userId: user.id,
+      ruta: 'etiquetar',
+      model: MODELO_RAPIDO,
+      maxTokens: 2048,
+      content: [
         {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mimeTypeForAI, data: base64 },
-            },
-            { type: 'text', text: prompt },
-          ],
+          type: 'image',
+          source: { type: 'base64', media_type: mimeTypeForAI, data: base64 },
         },
+        { type: 'text', text: prompt },
       ],
     })
-
-    const text = extractText(message.content)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>
