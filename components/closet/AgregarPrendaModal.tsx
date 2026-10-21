@@ -432,7 +432,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <h2 style={{ fontFamily: 'var(--font-display)' }} className="text-xl font-light">
+          <h2 style={{ fontFamily: 'var(--font-display)' }} className="text-xl font-medium">
             {step === 'success' ? '¡Prenda guardada!' : 'Agregar prenda'}
           </h2>
           <button
@@ -466,7 +466,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
                   </svg>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-light text-foreground"
+                  <p className="text-lg font-medium text-foreground"
                     style={{ fontFamily: 'var(--font-display)' }}>
                     ¿Qué prenda agregas?
                   </p>
@@ -568,7 +568,7 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
           {step === 'preview' && (
             <div className="flex flex-col gap-5 py-4">
               <div>
-                <p className="text-base font-light text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+                <p className="text-base font-medium text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
                   ¿Cuál foto se ve mejor?
                 </p>
                 {isDubious ? (

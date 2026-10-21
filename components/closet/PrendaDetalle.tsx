@@ -117,7 +117,7 @@ export function PrendaDetalle({ prenda, preferencia, onClose, onDeleted, onUpdat
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <h2 style={{ fontFamily: 'var(--font-display)' }} className="text-xl font-light capitalize">
+          <h2 style={{ fontFamily: 'var(--font-display)' }} className="text-xl font-medium capitalize">
             {prenda.tipo.replace(/_/g, ' ')}
           </h2>
           <button

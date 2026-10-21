@@ -75,13 +75,13 @@ export default async function OnboardingPage({
         <div
           className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-20"
           style={{
-            background: 'radial-gradient(circle, oklch(0.80 0.10 38) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.82 0.07 125) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute bottom-0 left-0 w-64 h-64 rounded-full opacity-15"
           style={{
-            background: 'radial-gradient(circle, oklch(0.82 0.08 72) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, oklch(0.86 0.04 95) 0%, transparent 70%)',
           }}
         />
       </div>
@@ -92,7 +92,7 @@ export default async function OnboardingPage({
           <HangerIcon className="w-5 h-5 text-primary" />
         </div>
         <span
-          className="text-lg font-light text-foreground"
+          className="text-lg font-medium text-foreground"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           Clóset Digital
@@ -103,7 +103,7 @@ export default async function OnboardingPage({
       <div className="flex-1 flex flex-col max-w-sm mx-auto w-full">
         <div className="mb-8 animate-fade-up">
           <h1
-            className="text-3xl font-light text-foreground mb-2 leading-snug"
+            className="text-3xl font-medium text-foreground mb-2 leading-snug"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             ¡Hola! Cuéntanos

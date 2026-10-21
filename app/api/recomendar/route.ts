@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
 import { OCASION_LABELS, filtrarCandidatas, validarCompatibilidadFijas } from '@/lib/recomendador'
+import { hoyLima, sumarDias } from '@/lib/fecha'
 import type { Prenda } from '@/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -853,14 +854,12 @@ export async function POST(request: NextRequest) {
   const prendasById = new Map(prendas.map((p) => [p.id, p]))
 
   // Fetch outfits used in last 7 days for context + deduplication
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
   const { data: usadosData } = await supabase
     .from('outfits_usados')
     .select('prenda_ids, fecha')
     .eq('user_id', user.id)
     .eq('estado', 'usado')
-    .gte('fecha', sevenDaysAgo.toISOString().split('T')[0])
+    .gte('fecha', sumarDias(hoyLima(), -7))
     .order('fecha', { ascending: false })
   const outfitsUsadosRecientes = (usadosData ?? []) as { prenda_ids: string[]; fecha: string }[]
 

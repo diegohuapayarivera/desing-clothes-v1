@@ -471,7 +471,7 @@ export function CombinarModal({
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
         <div className="flex items-center justify-between px-5 pb-4 shrink-0">
-          <h2 className="text-xl font-light" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-xl font-medium" style={{ fontFamily: 'var(--font-display)' }}>
             {step === 'resultado' ? 'Combíname esta prenda ✦' : 'Combíname esta prenda'}
           </h2>
           <button
@@ -575,7 +575,7 @@ export function CombinarModal({
             <div className="flex flex-col items-center justify-center py-16 gap-6">
               <div className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               <p
-                className="text-lg font-light text-center"
+                className="text-lg font-medium text-center"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
                 {loaderMsg}

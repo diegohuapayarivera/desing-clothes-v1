@@ -7,6 +7,7 @@ import { ArmarConjuntoModal } from './ArmarConjuntoModal'
 import { deleteConjunto, renameConjunto, registrarOutfitUsado } from '@/app/closet/actions'
 import { OCASION_LABELS, OCASION_EMOJI, NIVEL_CLIMA_LABELS, NIVEL_CLIMA_EMOJI } from '@/lib/recomendador'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
+import { hoyLima, sumarDias } from '@/lib/fecha'
 import type { Conjunto, PrendaConUrl } from '@/types'
 
 interface Props {
@@ -35,9 +36,9 @@ function ConjuntoDetalle({
   const [nombreInput, setNombreInput] = useState(conjunto.nombre ?? '')
   const [, startTransition] = useTransition()
 
-  const today = new Date().toISOString().split('T')[0]
-  const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0] })()
-  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()
+  const today = hoyLima()
+  const thirtyDaysAgo = sumarDias(today, -30)
+  const tomorrow = sumarDias(today, 1)
 
   const [fechaMeLoPuse, setFechaMeLoPuse] = useState(today)
   const [registrado, setRegistrado] = useState(false)
@@ -109,7 +110,7 @@ function ConjuntoDetalle({
         </div>
 
         <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <h2 className="text-xl font-light truncate pr-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-xl font-medium truncate pr-2" style={{ fontFamily: 'var(--font-display)' }}>
             {label}
           </h2>
           <button
@@ -359,7 +360,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Layers className="w-8 h-8 text-muted-foreground/50" />
           </div>
-          <h3 className="text-lg font-light text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h3 className="text-lg font-medium text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
             Sin conjuntos guardados
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
