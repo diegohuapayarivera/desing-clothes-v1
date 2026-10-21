@@ -33,7 +33,7 @@ export function PlaneadosHoyBanner({ planeados: initial }: Readonly<{ planeados:
       <div className="flex items-center justify-between mb-2.5">
         <p className="text-sm font-medium text-foreground/80">
           {items.length === 1
-            ? 'Hoy planeaste ponerte esto ✨'
+            ? 'Hoy planeaste ponerte esto'
             : `Tienes ${items.length} outfits planeados para hoy`}
         </p>
         <Link

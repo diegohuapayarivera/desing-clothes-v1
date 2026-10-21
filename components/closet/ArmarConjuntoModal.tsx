@@ -220,7 +220,7 @@ export function ArmarConjuntoModal({
               </button>
             )}
             <h2
-              className="text-xl font-light text-foreground"
+              className="text-xl font-medium text-foreground"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               {esEdicion

@@ -109,7 +109,7 @@ function ConjuntoDetalle({
         </div>
 
         <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <h2 className="text-xl font-light truncate pr-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-xl font-medium truncate pr-2" style={{ fontFamily: 'var(--font-display)' }}>
             {label}
           </h2>
           <button
@@ -359,7 +359,7 @@ export function MisConjuntos({ conjuntos: initialConjuntos, prendasConUrl }: Rea
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Layers className="w-8 h-8 text-muted-foreground/50" />
           </div>
-          <h3 className="text-lg font-light text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+          <h3 className="text-lg font-medium text-foreground mb-2" style={{ fontFamily: 'var(--font-display)' }}>
             Sin conjuntos guardados
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">

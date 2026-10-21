@@ -777,7 +777,7 @@ function EstadisticasSection({ estadisticas, loading }: Readonly<EstadisticasSec
 
       {prendasOlvidadas.length === 0 && prendaMasUsada && (
         <p className="text-xs text-center text-muted-foreground">
-          ✨ ¡Estás usando todas tus prendas! Bien hecho.
+          ¡Estás usando todas tus prendas! Bien hecho.
         </p>
       )}
     </div>

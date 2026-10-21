@@ -79,21 +79,21 @@ export default function LoginPage({
           className="absolute -top-24 -right-24 w-96 h-96 rounded-full opacity-30"
           style={{
             background:
-              'radial-gradient(circle, oklch(0.80 0.10 38) 0%, transparent 70%)',
+              'radial-gradient(circle, oklch(0.82 0.07 125) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute -bottom-32 -left-20 w-80 h-80 rounded-full opacity-20"
           style={{
             background:
-              'radial-gradient(circle, oklch(0.82 0.08 72) 0%, transparent 70%)',
+              'radial-gradient(circle, oklch(0.86 0.04 95) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-10"
           style={{
             background:
-              'radial-gradient(circle, oklch(0.78 0.06 50) 0%, transparent 60%)',
+              'radial-gradient(circle, oklch(0.80 0.05 110) 0%, transparent 60%)',
           }}
         />
       </div>
@@ -111,7 +111,7 @@ export default function LoginPage({
           {/* Heading */}
           <div className="text-center space-y-2 opacity-0 animate-fade-up delay-200">
             <h1
-              className="text-4xl font-display font-light tracking-tight text-foreground"
+              className="text-4xl font-display font-medium tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               Clóset Digital

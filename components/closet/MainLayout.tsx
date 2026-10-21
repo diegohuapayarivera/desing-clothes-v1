@@ -58,7 +58,7 @@ export function MainLayout({ initials, children }: Readonly<Props>) {
               <HangerIcon className="w-4 h-4 text-primary" />
             </div>
             <span
-              className="text-base font-light text-foreground"
+              className="text-base font-medium text-foreground"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               Clóset Digital

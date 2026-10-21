@@ -82,7 +82,7 @@ export default async function ClosetPage() {
           {tieneRopa ? 'Tu clóset' : 'Bienvenida de vuelta'}
         </p>
         <h1
-          className="text-3xl font-light text-foreground leading-tight"
+          className="text-3xl font-medium text-foreground leading-tight"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           Hola, {nombre?.split(' ')[0]} ✦
@@ -108,7 +108,7 @@ export default async function ClosetPage() {
               <EmptyClosetIllustration />
             </div>
             <h2
-              className="text-xl font-light text-foreground mb-2"
+              className="text-xl font-medium text-foreground mb-2"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               Tu clóset está vacío
