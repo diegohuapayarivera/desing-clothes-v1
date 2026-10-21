@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { createClient } from '@/lib/supabase/server'
 import { extractText } from '@/lib/anthropic'
-import { hoyLima } from '@/lib/fecha'
+import { hoyLima, inicioSemanaLima } from '@/lib/fecha'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -10,9 +10,10 @@ export const MODELO_RAPIDO = 'claude-haiku-5-5'
 // Recomendaciones de outfits: necesita más criterio de combinación.
 export const MODELO_ESTILISTA = 'claude-sonnet-5-5'
 
-// Llamadas al estilista por usuario y día (hora de Lima). Una generación hace
-// 1-2 llamadas según si hace falta reintento.
-export const LIMITE_DIARIO_ESTILISTA = 30
+// Llamadas al estilista por usuario (hora de Lima; la semana va de lunes a
+// domingo). Una generación hace 1-2 llamadas según si hace falta reintento.
+export const LIMITE_DIARIO_ESTILISTA = 15
+export const LIMITE_SEMANAL_ESTILISTA = 45
 
 export type RutaIA = 'etiquetar' | 'opinar' | 'recomendar'
 
@@ -68,13 +69,27 @@ export async function pedirTexto({
   return extractText(message.content)
 }
 
-/** Llamadas al estilista que el usuario ya hizo hoy (hora de Lima). */
-export async function llamadasEstilistaHoy(supabase: Supabase, userId: string): Promise<number> {
+async function llamadasEstilistaDesde(supabase: Supabase, userId: string, fecha: string): Promise<number> {
   const { count } = await supabase
     .from('ai_uso')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('ruta', 'recomendar')
-    .gte('created_at', `${hoyLima()}T00:00:00-05:00`)
+    .gte('created_at', `${fecha}T00:00:00-05:00`)
   return count ?? 0
+}
+
+/** Mensaje para el usuario si superó el límite diario o semanal; null si puede seguir. */
+export async function limiteEstilistaAlcanzado(supabase: Supabase, userId: string): Promise<string | null> {
+  const [hoy, semana] = await Promise.all([
+    llamadasEstilistaDesde(supabase, userId, hoyLima()),
+    llamadasEstilistaDesde(supabase, userId, inicioSemanaLima()),
+  ])
+  if (semana >= LIMITE_SEMANAL_ESTILISTA) {
+    return 'Llegaste al límite de recomendaciones de esta semana. Se reinicia el lunes.'
+  }
+  if (hoy >= LIMITE_DIARIO_ESTILISTA) {
+    return 'Llegaste al límite de recomendaciones por hoy. Vuelve a intentarlo mañana.'
+  }
+  return null
 }

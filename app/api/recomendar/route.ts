@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { LIMITE_DIARIO_ESTILISTA, MODELO_ESTILISTA, llamadasEstilistaHoy, pedirTexto } from '@/lib/ia'
+import { MODELO_ESTILISTA, limiteEstilistaAlcanzado, pedirTexto } from '@/lib/ia'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import type { Ocasion, NivelClima } from '@/lib/recomendador'
@@ -470,12 +470,8 @@ export async function POST(request: NextRequest) {
 
   const { ocasion, clima, mode } = body
 
-  if ((await llamadasEstilistaHoy(supabase, user.id)) >= LIMITE_DIARIO_ESTILISTA) {
-    return NextResponse.json(
-      { error: 'Llegaste al límite de recomendaciones por hoy. Vuelve a intentarlo mañana.' },
-      { status: 429 },
-    )
-  }
+  const limite = await limiteEstilistaAlcanzado(supabase, user.id)
+  if (limite) return NextResponse.json({ error: limite }, { status: 429 })
   const ctx: CtxIA = { supabase, userId: user.id }
 
   // ── Replace mode ─────────────────────────────────────────────────────────

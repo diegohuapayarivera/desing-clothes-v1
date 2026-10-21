@@ -30,6 +30,14 @@ export function mesActualLima(): { year: number; month: number } {
   return { year, month: month - 1 }
 }
 
+/** Lunes de la semana actual en Lima como 'YYYY-MM-DD'. */
+export function inicioSemanaLima(): string {
+  const hoy = hoyLima()
+  const [y, m, d] = hoy.split('-').map(Number)
+  const diaSemana = new Date(Date.UTC(y, m - 1, d)).getUTCDay() // 0 = domingo
+  return sumarDias(hoy, -((diaSemana + 6) % 7))
+}
+
 /** Suma (o resta, con negativos) días a una fecha 'YYYY-MM-DD'. */
 export function sumarDias(fecha: string, dias: number): string {
   const [y, m, d] = fecha.split('-').map(Number)
