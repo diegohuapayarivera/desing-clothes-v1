@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, DM_Sans } from 'next/font/google'
+import { UmamiAnalytics } from '@/components/umami-analytics'
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
@@ -38,6 +39,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
+        <UmamiAnalytics />
       </body>
     </html>
   )

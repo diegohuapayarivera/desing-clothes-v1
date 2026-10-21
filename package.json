@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.104.1",
     "@base-ui/react": "^1.5.0",
     "@imgly/background-removal": "^1.7.0",
+    "@sentry/nextjs": "^11.8.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "browser-image-compression": "^2.0.2",
@@ -27,12 +28,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "shadcn": "^4.11.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "shadcn": "^4.11.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
