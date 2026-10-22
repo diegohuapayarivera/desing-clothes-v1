@@ -6,7 +6,7 @@ export function UmamiAnalytics() {
 
   return (
     <Script
-      src="https://stats.lookatevent.org/script.js"
+      src="https://stats.nrlsys.com/script.js"
       data-website-id={id}
       strategy="afterInteractive"
     />
