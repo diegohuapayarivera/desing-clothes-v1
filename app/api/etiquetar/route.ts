@@ -12,7 +12,7 @@ import {
   normalizarColor,
   normalizarTemporada,
 } from '@/lib/taxonomia'
-import { MODELO_RAPIDO, pedirTexto } from '@/lib/ia'
+import { MODELO_RAPIDO, limiteRapidoAlcanzado, pedirTexto } from '@/lib/ia'
 
 const TagsSchema = z.object({
   categoria: z.enum(CATEGORIAS),
@@ -73,6 +73,10 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
+
+  // Antes de subir a Storage: pasado el límite no se guarda ni se etiqueta nada.
+  const limite = await limiteRapidoAlcanzado(supabase, user.id, 'etiquetar')
+  if (limite) return NextResponse.json({ error: limite }, { status: 429 })
 
   let imageBytes: Uint8Array
   let mimeType: 'image/webp' | 'image/jpeg' | 'image/png'

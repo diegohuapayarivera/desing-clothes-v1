@@ -17,6 +17,14 @@ export const LIMITE_SEMANAL_ESTILISTA = 45
 
 export type RutaIA = 'etiquetar' | 'opinar' | 'recomendar'
 
+// Tope diario de las rutas con el modelo rápido: alto para no estorbar al
+// digitalizar el clóset de una sentada, pero acota el gasto si alguien las
+// llama en bucle (cualquier cuenta de Google puede entrar).
+export const LIMITE_DIARIO_RAPIDO: Record<Exclude<RutaIA, 'recomendar'>, number> = {
+  etiquetar: 150,
+  opinar: 60,
+}
+
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
 interface PedirTextoOpts {
@@ -69,21 +77,34 @@ export async function pedirTexto({
   return extractText(message.content)
 }
 
-async function llamadasEstilistaDesde(supabase: Supabase, userId: string, fecha: string): Promise<number> {
+async function llamadasDesde(supabase: Supabase, userId: string, ruta: RutaIA, fecha: string): Promise<number> {
   const { count } = await supabase
     .from('ai_uso')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .eq('ruta', 'recomendar')
+    .eq('ruta', ruta)
     .gte('created_at', `${fecha}T00:00:00-05:00`)
   return count ?? 0
+}
+
+/** Mensaje para el usuario si superó el límite diario de etiquetar/opinar; null si puede seguir. */
+export async function limiteRapidoAlcanzado(
+  supabase: Supabase,
+  userId: string,
+  ruta: Exclude<RutaIA, 'recomendar'>,
+): Promise<string | null> {
+  const hoy = await llamadasDesde(supabase, userId, ruta, hoyLima())
+  if (hoy >= LIMITE_DIARIO_RAPIDO[ruta]) {
+    return 'Llegaste al límite de uso por hoy. Vuelve a intentarlo mañana.'
+  }
+  return null
 }
 
 /** Mensaje para el usuario si superó el límite diario o semanal; null si puede seguir. */
 export async function limiteEstilistaAlcanzado(supabase: Supabase, userId: string): Promise<string | null> {
   const [hoy, semana] = await Promise.all([
-    llamadasEstilistaDesde(supabase, userId, hoyLima()),
-    llamadasEstilistaDesde(supabase, userId, inicioSemanaLima()),
+    llamadasDesde(supabase, userId, 'recomendar', hoyLima()),
+    llamadasDesde(supabase, userId, 'recomendar', inicioSemanaLima()),
   ])
   if (semana >= LIMITE_SEMANAL_ESTILISTA) {
     return 'Llegaste al límite de recomendaciones de esta semana. Se reinicia el lunes.'

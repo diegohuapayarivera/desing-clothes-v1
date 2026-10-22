@@ -21,6 +21,7 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'Clóset Digital',
   description: 'Digitaliza tu armario y recibe recomendaciones de outfits con IA.',
+  authors: [{ name: 'NRL Systems', url: 'https://nrlsys.com' }],
 }
 
 export const viewport: Viewport = {
