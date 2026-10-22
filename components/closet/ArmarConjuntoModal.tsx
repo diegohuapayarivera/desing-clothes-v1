@@ -133,7 +133,9 @@ export function ArmarConjuntoModal({
       })
       const data = (await res.json()) as { opinion?: string; error?: string }
       if (!res.ok || !data.opinion) {
-        setErrorOpinion('No se pudo obtener la opinión. Intenta de nuevo.')
+        setErrorOpinion(
+          res.status === 429 && data.error ? data.error : 'No se pudo obtener la opinión. Intenta de nuevo.',
+        )
       } else {
         setOpinion(data.opinion)
       }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { MODELO_RAPIDO, pedirTexto } from '@/lib/ia'
+import { MODELO_RAPIDO, limiteRapidoAlcanzado, pedirTexto } from '@/lib/ia'
 
 const RequestSchema = z.object({
   prenda_ids: z.array(z.string()).min(1).max(20),
@@ -15,6 +15,9 @@ export async function POST(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+  const limite = await limiteRapidoAlcanzado(supabase, user.id, 'opinar')
+  if (limite) return NextResponse.json({ error: limite }, { status: 429 })
 
   let body: unknown
   try {

@@ -258,6 +258,12 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
         fd.append('image_original', compressedOriginal, 'original.jpg')
       }
       const res = await fetch('/api/etiquetar', { method: 'POST', body: fd })
+      if (res.status === 429) {
+        const { error } = (await res.json()) as { error: string }
+        setError(error)
+        setStep('capture')
+        return
+      }
       if (!res.ok) throw new Error('server error')
       const data: { foto_path: string; tags: TagsIA | null } = await res.json()
       setForm({
@@ -451,6 +457,12 @@ export function AgregarPrendaModal({ preferencia, onClose, onSaved }: Props) {
           {/* ── Step: capture ── */}
           {step === 'capture' && (
             <div className="flex flex-col py-6 gap-8">
+              {error && (
+                <p className="text-xs text-destructive bg-destructive/5 px-4 py-3 rounded-xl">
+                  {error}
+                </p>
+              )}
+
               {/* Illustration */}
               <div className="flex flex-col items-center gap-3 pt-2">
                 <div className="relative flex items-center justify-center">

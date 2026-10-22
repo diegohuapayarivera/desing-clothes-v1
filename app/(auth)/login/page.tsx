@@ -109,6 +109,10 @@ export default function LoginPage({
             .
           </p>
         </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground opacity-0 animate-fade-up delay-400">
+          Hecho por NRL Systems · Perú
+        </p>
       </div>
     </main>
   )
